@@ -342,7 +342,8 @@ function updateDrills() {
     const ty=d.y; prop[ty*W+d.x]=1; prop[ty*W+d.x+DRILL_W-1]=1;
     if ((d.depth=(d.depth||0)+1)%8===0) for (let c=0;c<DRILL_W;c++) prop[ty*W+d.x+c]=1;
     // solid timber lining on the outside of both walls so loose ground and water can't run in sideways
-    for (const lx of [d.x-1, d.x+DRILL_W]) for (const ly of [ty, by]) if (inB(lx,ly)) { const li=ly*W+lx, lt=g[li]; if (lt===E||lt===SOIL||lt===GRASS||lt===SAND||lt===RUBBLE||lt===WATER) { g[li]=TIMBER; hp[li]=0; } }
+    // ...except a 2-row gap every 10 rows, so you can dig side galleries off the shaft
+    for (const lx of [d.x-1, d.x+DRILL_W]) for (const ly of [ty, by]) if (inB(lx,ly) && ly%10>=2) { const li=ly*W+lx, lt=g[li]; if (lt===E||lt===SOIL||lt===GRASS||lt===SAND||lt===RUBBLE||lt===WATER) { g[li]=TIMBER; hp[li]=0; } }
     d.y++; d.rem--;
     if (d.rem%4===0) sfx.dig();
     queueRockCheck(d.x+DRILL_W/2,by,5);
