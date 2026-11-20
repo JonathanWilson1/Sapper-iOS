@@ -928,6 +928,7 @@ function drawEntities(s) {
   for (const p of popups) { ctx.fillStyle=`rgba(240,200,80,${p.life/60})`; ctx.fillText(p.txt, p.x*s, p.y*s); }
   // ghost
   const gh = ghost();
+  if (drawAt && state==='play') { ctx.strokeStyle='#e8d6a0cc'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.arc(drawAt.x*s,drawAt.y*s,PAINT_R*s,0,6.29); ctx.stroke(); }
   if (dragItem && dragItem.active && dragItem.id==='concrete' && ghostPos) { ctx.strokeStyle='#e8d6a0cc'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.arc(ghostPos.x*s,ghostPos.y*s,PAINT_R*s,0,6.29); ctx.stroke(); }
   if (gh && !gh.cells.length && ghostPos) { ctx.strokeStyle='rgba(220,80,60,.8)'; ctx.lineWidth=Math.max(1,dpr); const gx=Math.floor(ghostPos.x)*s, gy=Math.floor(ghostPos.y)*s; ctx.strokeRect(gx-4*s,gy-4*s,9*s,9*s); ctx.beginPath(); ctx.moveTo(gx-4*s,gy-4*s); ctx.lineTo(gx+5*s,gy+5*s); ctx.moveTo(gx+5*s,gy-4*s); ctx.lineTo(gx-4*s,gy+5*s); ctx.stroke(); }
   if (gh) for (const c of gh.cells) { ctx.fillStyle = !c.ok ? 'rgba(200,60,40,.35)' : gh.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); }
@@ -1026,7 +1027,7 @@ function buildTray() {
     tray.append(el);
   }
 }
-function refreshTray(){ for (const el of $('tray').children){ const it=ITEM[el.dataset.id]; el.classList.toggle('poor', it.cost>gold); } }
+function refreshTray(){ for (const el of $('tray').children){ const it=ITEM[el.dataset.id]; el.classList.toggle('poor', it.cost>gold); el.classList.toggle('sel', it.kind==='draw' && drawMode); } }
 function updateHUD() {
   const t=Math.floor(game.t); $('timeStat').textContent = String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');
   $('goldStat').textContent = '◆ '+gold;
@@ -1043,7 +1044,7 @@ let drillTap = null, pendingAt = 0, gesture = null, ghostPos = null, dragItem = 
 function pinchState(){ const ps=[...pointers.values()], a=ps[0], b=ps[1]||ps[0]; return { x:(a.x+b.x)/2, y:(a.y+b.y)/2, d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)) }; }
 function toWorld(cx, cy){ return { x: cam.x + cx*dpr/scale, y: cam.y + cy*dpr/scale }; }
 const PAINT_R = 1.6, PAINT_COST = .5;   // ◆ per cell of drawn concrete
-let paintLast = null, paintAcc = 0, paintN = 0;
+let drawMode = false, drawAt = null, paintLast = null, paintAcc = 0, paintN = 0;
 function paintConcrete(p) {
   const from = paintLast || p, n = Math.max(1, Math.ceil(Math.hypot(p.x-from.x, p.y-from.y)/.7));
   for (let k=0;k<=n;k++) {
@@ -1077,7 +1078,7 @@ cv.addEventListener('pointerdown', e => {
   sfx.init();
   pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   cam.vy = 0; cam.vx = 0;
-  if (pointers.size>=2) { gesture='pan2'; digAt=null; pinch=pinchState(); return; }
+  if (pointers.size>=2) { gesture='pan2'; digAt=null; drawAt=null; paintLast=null; pinch=pinchState(); return; }
   const w = toWorld(e.clientX,e.clientY);
   const dr = drillAt(w); if (dr) { gesture='drill'; drillTap={ d:dr, sx:e.clientX, sy:e.clientY }; return; }
   gesture='pending'; pendingAt=performance.now();   // becomes a dig unless a second finger lands quickly
@@ -1104,12 +1105,14 @@ function endPointer(e) {
   if (dragItem) {
     if (e.pointerId!==dragItem.pid) return;
     if (dragItem.active) { if (dragItem.id==='concrete') { paintLast=null; paintConcrete.warned=false; if (paintN) haptic('light'); paintN=0; } else if (e.type==='pointerup' && ghostPos) place(dragItem.id, ghostPos.x, ghostPos.y); }
-    else if (e.type==='pointerup') { const it=ITEM[dragItem.id]; if (it.kind==='action') doAction(it.id); else toast(it.kind==='draw' ? 'Drag CONCRETE out of the tray and draw walls with it' : `Drag ${it.name} out of the tray and drop it`); }
+    else if (e.type==='pointerup') { const it=ITEM[dragItem.id]; if (it.kind==='action') doAction(it.id); else if (it.kind==='draw') { drawMode=!drawMode; refreshTray(); toast(drawMode ? 'CONCRETE ON — one finger draws walls. Tap it again to dig.' : 'CONCRETE OFF — one finger digs.'); }
+      else toast(`Drag ${it.name} out of the tray and drop it`); }
     dragItem=null; ghostPos=null; return;
   }
   if (!pointers.has(e.pointerId)) return;
   if (gesture==='drill' && pointers.size===1 && e.type==='pointerup' && drillTap) { const p=pointers.get(e.pointerId); if (Math.hypot(p.x-drillTap.sx,p.y-drillTap.sy)<16) pressDrill(drillTap.d); }
   pointers.delete(e.pointerId); pinch=null;
+  if (gesture==='draw') { paintLast=null; paintConcrete.warned=false; drawAt=null; if (paintN) haptic('light'); paintN=0; }
   if (pointers.size===0) { if (performance.now()-lastPan>80) { cam.vy=0; cam.vx=0; } gesture=null; digAt=null; }
 }
 addEventListener('pointerup', endPointer); addEventListener('pointercancel', endPointer);
@@ -1135,7 +1138,7 @@ function startGame() {
   demo = false; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(false);
   Object.assign(game, { t:0, mined:0, kills:0, nextEvent:22, harassAt:30, intensity:1, events:0 });
-  gold = 140; ITEM.gen.cost = 150; state='play';
+  gold = 140; ITEM.gen.cost = 150; drawMode = false; state='play';
   ['menu','help','over','pause'].forEach(s=>show(s,false)); show('hud',true); show('tray',true); show('mini',true);
   cam.zoom=1; cam.x=0; buildTray(); resize();
   cam.y = 0; cam.vy=0; cam.x = gens[0].x+GEN_W/2 - cv.width/scale/2; clampCam();
@@ -1214,7 +1217,8 @@ function frame(now) {
   if (state==='menu') { const g0=gens[0]||{x:W/2,y:80,w:0}; cam.x = Math.max(0, g0.x+g0.w/2 - cv.width/scale/2); const tgt = Math.max(-10, (g0.y+20 - viewRows()*.55) * (.5 - .5*Math.cos((tick-demoStart)/700))); cam.y += (tgt-cam.y)*.02; }
   else if (state==='play' && pointers.size===0) { cam.y += cam.vy; cam.x += cam.vx; cam.vy *= .92; cam.vx *= .92; if (Math.abs(cam.vy)<.01) cam.vy=0; if (Math.abs(cam.vx)<.01) cam.vx=0;
     clampCam(); }
-  if (gesture==='pending' && pointers.size===1 && performance.now()-pendingAt>70) gesture='dig';
+  if (gesture==='pending' && pointers.size===1 && performance.now()-pendingAt>70) gesture = drawMode ? 'draw' : 'dig';
+  if (gesture==='draw') { const p=[...pointers.values()][0]; if (p) { drawAt=toWorld(p.x,p.y); paintConcrete(drawAt); } }
   if (gesture==='dig') { const p=[...pointers.values()][0]; if (p) digAt=toWorld(p.x,p.y); }
   render();
   if (state==='play') { updateHUD(); if (++frameN % 12 === 0) renderMini(); }
