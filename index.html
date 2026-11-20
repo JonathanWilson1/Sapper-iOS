@@ -94,7 +94,7 @@
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>BAGS</em> and <em>CONCRETE</em> soak up shellfire.</p>
     <p><em>PUMP</em> drains floods. <em>LAMP</em> lights the dark. <em>MG NEST</em> cuts down raiders.</p>
-    <p>Drag anything from the tray to drop it once, or tap it to keep placing.</p>
+    <p>Drag items up out of the tray to place them. <em>Pinch</em> to zoom.</p>
     <p>Keep the <em>COMMAND POST</em> standing. Survive as long as you can.</p>
   </div>
   <button id="helpBack" class="primary">Understood</button>
@@ -135,7 +135,9 @@ const hp  = new Uint8Array(W*H);   // dig progress / fire life
 const sh  = new Uint8Array(W*H);   // per-cell shade noise
 const st  = new Uint8Array(W*H);   // updated-this-tick stamp
 const bgc = new Uint8Array(W*H);   // back wall: 0 sky,1 soil,2 rock,3 sand
-const sup = new Uint8Array(W*H);   // ceiling support map
+const sup = new Uint8Array(W*H);
+const prop = new Uint8Array(W*H);  // background timber bracing: supports ceilings, lets water/raiders through
+const PROPBG = 99;   // ceiling support map
 const hbuf= new Uint8Array(W*H);
 const surfOrig = new Int16Array(W);
 const SKY = 44;
@@ -194,7 +196,7 @@ function buildSky(s) {
 
 // ---------- world generation
 function genWorld(s) {
-  seed = s; g.fill(0); hp.fill(0); bgc.fill(0); st.fill(0);
+  seed = s; g.fill(0); hp.fill(0); prop.fill(0); bgc.fill(0); st.fill(0);
   const r = mulberry(s);
   buildSky(s);
   for (let x=0;x<W;x++) surfOrig[x] = SKY + Math.round((fbm(x*.04,3.3,s,2)-.5)*6);
@@ -235,7 +237,7 @@ function buildBase(isDemo) {
   fillRect(32,fy,62,2,CONC);
   hq = { x:58, y:fy-7, w:14, h:7, hp:100, max:100, level:1 };
   fillRect(hq.x,hq.y,hq.w,hq.h,HQ);
-  const frame = (L,R,top,bot,posts) => { fillRect(L,top,R-L+1,2,TIMBER); for (const p of posts) fillRect(p,top+2,1,bot-top-1,TIMBER); };
+  const frame = (L,R,top,bot,posts) => { const mark=(x,y)=>{ if (inB(x,y)) prop[idx(x,y)]=1; }; for (let x=L;x<=R;x++){ mark(x,top); mark(x,top+1); } for (const p of posts) for (let y=top+2;y<=bot;y++) mark(p,y); };
   frame(41,91,fy-13,fy-1,[41,52,77,91]);
   place('lamp', 47, fy-11, true); place('lamp', 84, fy-11, true); place('lamp', 34, s34+16, true);
   // a gold vein to teach mining, just off the chamber
@@ -278,8 +280,8 @@ function propCells(cx, cy) {
   let R=cx; while (R<cx+12 && R<W-1 && free(R+1,top)) R++;
   if (!ceil || R-L>22 || R-L<2) { L=Math.max(0,cx-4); R=Math.min(W-1,cx+4); }
   const out=[];
-  for (let x=L;x<=R;x++){ out.push([x,top,TIMBER]); out.push([x,top+1,TIMBER]); }
-  for (let y=top+2;y<=bot;y++){ out.push([L,y,TIMBER]); out.push([R,y,TIMBER]); }
+  for (let x=L;x<=R;x++){ out.push([x,top,PROPBG]); out.push([x,top+1,PROPBG]); }
+  for (let y=top+2;y<=bot;y++){ out.push([L,y,PROPBG]); out.push([R,y,PROPBG]); }
   return out;
 }
 function rectCells(cx,cy,w,h,t){ const out=[]; const x0=Math.round(cx-w/2), y0=Math.round(cy-h/2); for(let y=0;y<h;y++) for(let x=0;x<w;x++) out.push([x0+x,y0+y,t]); return out; }
@@ -301,7 +303,7 @@ function stampFor(id, cx, cy) {
     c.ok = free(c[0],c[1]);
     if (!c.ok) continue;
     placeable++;
-    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) { const nx=c[0]+dx, ny=c[1]+dy; if (inB(nx,ny) && !set.has(ny*W+nx) && SOLID[g[idx(nx,ny)]]) anchored=true; }
+    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) { const nx=c[0]+dx, ny=c[1]+dy; if (inB(nx,ny) && !set.has(ny*W+nx) && (SOLID[g[idx(nx,ny)]] || prop[idx(nx,ny)])) anchored=true; }
   }
   const ok = anchored && (needAll ? placeable===cells.length : placeable >= cells.length*.5);
   return { cells, ok };
@@ -311,7 +313,7 @@ function place(id, cx, cy, freeOfCharge) {
   if (!freeOfCharge && gold < it.cost) { toast('Not enough gold — dig for ore ◆'); sfx.deny(); return false; }
   const s = stampFor(id, cx, cy);
   if (!s.ok) { if (!freeOfCharge) { toast(id==='prop' ? 'Drop props inside a tunnel or on solid ground' : 'Needs open space touching solid ground'); sfx.deny(); } return false; }
-  for (const c of s.cells) if (c.ok) setCell(c[0],c[1],c[2]);
+  for (const c of s.cells) if (c.ok) { if (c[2]===PROPBG) prop[idx(c[0],c[1])]=1; else setCell(c[0],c[1],c[2]); }
   if (id==='pump') { const c=s.cells[0]; pumps.push({ x:c[0], y:c[1], spin:0 }); }
   if (id==='mg')   { const c=s.cells[0]; mgs.push({ x:c[0], y:c[1], cool:0, ang:-Math.PI/2, flash:0 }); }
   if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); }
@@ -335,7 +337,7 @@ function doAction(id) {
 const SUPR = 6;
 function computeSupport() {
   for (let y=0;y<H;y++){ let c=0; const row=y*W;
-    for (let x=-SUPR;x<W;x++){ const a=x+SUPR; if(a<W && SUPPORTS[g[row+a]]) c++; const b=x-SUPR-1; if(b>=0 && SUPPORTS[g[row+b]]) c--; if(x>=0) hbuf[row+x]=c>0?1:0; } }
+    for (let x=-SUPR;x<W;x++){ const a=x+SUPR; if(a<W && (SUPPORTS[g[row+a]]||prop[row+a])) c++; const b=x-SUPR-1; if(b>=0 && (SUPPORTS[g[row+b]]||prop[row+b])) c--; if(x>=0) hbuf[row+x]=c>0?1:0; } }
   for (let x=0;x<W;x++){ let c=0;
     for (let y=-SUPR;y<H;y++){ const a=y+SUPR; if(a<H && hbuf[a*W+x]) c++; const b=y-SUPR-1; if(b>=0 && hbuf[b*W+x]) c--; if(y>=0) sup[y*W+x]=c>0?1:0; } }
 }
@@ -390,11 +392,12 @@ function stepSim() {
           break;
         }
         case FIRE: {
-          if (hp[i]>0) hp[i]--; if (hp[i]===0) { g[i]=E; break; }
+          prop[i]=0; if (hp[i]>0) hp[i]--; if (hp[i]===0) { g[i]=E; break; }
           if (rand()<.02) particles.push({x:x+.5,y:y,vx:(rand()-.5)*.05,vy:-.08-rand()*.05,life:90,max:90,k:'smoke'});
           const nb=[i-1,i+1,i-W,i+W];
           for (const n of nb) { if (n<0||n>=W*H) continue; const tn=g[n];
             if (tn===WATER) { g[i]=E; break; }
+            if (prop[n] && tn===E && rand()<.01) { g[n]=FIRE; hp[n]=150; prop[n]=0; }
             if ((tn===TIMBER && rand()<.012) || (tn===GRASS && rand()<.003) || (tn===BAGS && rand()<.0015)) { g[n]=FIRE; hp[n]=tn===TIMBER?200:90; }
           }
           break;
@@ -415,6 +418,7 @@ function explode(x, y, r, opt={}) {
     let acc=0;
     for (let s=1;s<d;s++){ const px=Math.round(xi+dx*s/d), py=Math.round(yi+dy*s/d); if (inB(px,py)) acc+=RES[g[py*W+px]]; if (acc>r) break; }
     const e = r - d - acc;
+    if (e>1 && prop[i]) { prop[i]=0; if (t===E && rand()<.15) { g[i]=FIRE; hp[i]=80; continue; } }
     if (t===HQ) { if (e>hqMax) hqMax=e; continue; }
     if (e<=0) { if (e>-2.5 && (t===SOIL||t===GRASS) && rand()<.5) g[i]=RUBBLE; continue; }
     if (t===E) { if (opt.fire && rand()<opt.fire*.06) { g[i]=FIRE; hp[i]=30+rand()*60|0; } continue; }
@@ -641,15 +645,16 @@ function updateDemo() {
 }
 
 // ---------- camera
-const cam = { y: 0, vy: 0, target: null };
+const cam = { x: 0, y: 0, vx: 0, vy: 0, zoom: 1 };
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 let dpr=1, scale=4, trayPx=0;
 function viewRows(){ return cv.height/scale; }
-function clampCam(){ const max = H - (cv.height - trayPx)/scale + 2; cam.y = Math.max(-14, Math.min(max, cam.y)); }
+function clampCam(){ const max = H - (cv.height - trayPx)/scale + 2; cam.y = Math.max(-14, Math.min(max, cam.y)); cam.x = Math.max(0, Math.min(W - cv.width/scale, cam.x)); }
+function zoomAt(z, ax, ay){ z=Math.max(1,Math.min(3.5,z)); const wx=cam.x+ax*dpr/scale, wy=cam.y+ay*dpr/scale; cam.zoom=z; scale=cv.width/W*z; cam.x=wx-ax*dpr/scale; cam.y=wy-ay*dpr/scale; clampCam(); }
 function resize() {
   dpr = Math.min(3, window.devicePixelRatio||1);
   cv.width = Math.round(innerWidth*dpr); cv.height = Math.round(innerHeight*dpr);
-  scale = cv.width / W;
+  scale = cv.width / W * cam.zoom;
   const tray = document.getElementById('tray'); trayPx = tray.hidden ? 0 : tray.offsetHeight*dpr;
   clampCam();
 }
@@ -693,13 +698,15 @@ function render() {
         const i=y*W+x, t=g[i], v=sh[i]&7;
         if (t===E) {
           const w=bgc[i];
-          if (w===0) { const si = Math.min(y,SKYROWS-1)*W+x; R=skyR[si];G=skyG[si];B=skyB[si]; lit=1+L*.6; }
+          if (prop[i]) { const pv=(x*3+y)%7===0; R=palR[TIMBER*8+v]-(pv?22:0); G=palG[TIMBER*8+v]-(pv?18:0); B=palB[TIMBER*8+v]-(pv?12:0); lit=amb+L; }
+          else if (w===0) { const si = Math.min(y,SKYROWS-1)*W+x; R=skyR[si];G=skyG[si];B=skyB[si]; lit=1+L*.6; }
           else { const c=WALL[w], o=(v-3.5)*1.6; R=c[0]+o;G=c[1]+o;B=c[2]+o; lit = amb*.55 + L; }
         } else if (t===FIRE) {
           const f=(sh[i]+tk*7)&31; R=255; G=90+f*4; B=20+(f>24?80:0); lit=1;
         } else if (t===WATER) {
           const sv=((sh[i]>>3)+(tk>>3))&7; R=palR[WATER*8+sv]; G=palG[WATER*8+sv]; B=palB[WATER*8+sv];
           if (y>0 && g[i-W]===E) { R+=30; G+=40; B+=40; }
+          if (prop[i]) { R=(R+palR[TIMBER*8+v])/2; G=(G+palG[TIMBER*8+v])/2; B=(B+palB[TIMBER*8+v])/2; }
           lit = amb + L;
         } else if (t===LAMP) { R=255;G=226;B=150; lit=1.2; }
         else {
@@ -723,8 +730,8 @@ function render() {
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
   const oy = -(cam.y-y0)*s + sy;
-  ctx.drawImage(off, 0, 0, W, rows, sx, oy, W*s, rows*s);
-  ctx.save(); ctx.translate(sx, sy - cam.y*s);
+  ctx.drawImage(off, 0, 0, W, rows, sx - cam.x*s, oy, W*s, rows*s);
+  ctx.save(); ctx.translate(sx - cam.x*s, sy - cam.y*s);
   drawEntities(s);
   ctx.restore();
   drawOverlayUI(s);
@@ -775,7 +782,7 @@ function drawEntities(s) {
 function drawOverlayUI(s) {
   // incoming shell markers at the top edge
   if (state==='play') for (const sh2 of shells) if (sh2.y < cam.y) {
-    const x=sh2.x*s; const y=(70)*dpr; ctx.fillStyle = (tick>>2)&1 ? '#e04a30' : '#ffb060';
+    const x=(sh2.x-cam.x)*s; const y=(70)*dpr; ctx.fillStyle = (tick>>2)&1 ? '#e04a30' : '#ffb060';
     ctx.beginPath(); ctx.moveTo(x-5*dpr,y); ctx.lineTo(x+5*dpr,y); ctx.lineTo(x,y+7*dpr); ctx.fill();
   }
   // HQ off-screen indicator
@@ -798,7 +805,7 @@ function renderMini() {
   mctx.putImageData(mimg,0,0);
   mctx.fillStyle='#e04a30'; mctx.fillRect(hq.x/4,hq.y/4,hq.w/4,2);
   mctx.fillStyle='#ff4'; for (const s of soldiers) mctx.fillRect(s.x/4|0, s.y/4-1|0, 1, 1);
-  mctx.strokeStyle='#e8d6a0'; mctx.lineWidth=1; mctx.strokeRect(.5, cam.y/4+.5, 31, (cv.height-trayPx)/scale/4);
+  mctx.strokeStyle='#e8d6a0'; mctx.lineWidth=1; mctx.strokeRect(cam.x/4+.5, cam.y/4+.5, cv.width/scale/4-1, (cv.height-trayPx)/scale/4);
 }
 
 // ---------- sound (WebAudio, synthesized)
@@ -875,8 +882,9 @@ function updateHUD() {
 
 // ---------- input
 const pointers = new Map();
-let gesture = null, ghostPos = null, dragItem = null, lastPan = 0;
-function toWorld(cx, cy){ return { x: cx*dpr/scale, y: cam.y + cy*dpr/scale }; }
+let gesture = null, ghostPos = null, dragItem = null, lastPan = 0, pinch = null;
+function pinchState(){ const ps=[...pointers.values()], a=ps[0], b=ps[1]||ps[0]; return { x:(a.x+b.x)/2, y:(a.y+b.y)/2, d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)) }; }
+function toWorld(cx, cy){ return { x: cam.x + cx*dpr/scale, y: cam.y + cy*dpr/scale }; }
 function ghost() {
   if (state!=='play' || !ghostPos) return null;
   const id = dragItem ? dragItem.id : (ITEM[tool].kind==='stamp' ? tool : null);
@@ -889,35 +897,41 @@ cv.addEventListener('pointerdown', e => {
   sfx.init();
   pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   cam.vy = 0;
-  if (pointers.size>=2) { gesture='pan2'; digAt=null; ghostPos=null; return; }
+  if (pointers.size>=2) { gesture='pan2'; digAt=null; ghostPos=null; pinch=pinchState(); return; }
   const kind = ITEM[tool].kind;
   if (tool==='pan') gesture='pan';
   else if (tool==='dig') { gesture='dig'; digAt=toWorld(e.clientX,e.clientY); }
   else if (kind==='stamp') { gesture='stamp'; ghostPos=ghostFrom(e); }
 });
 addEventListener('pointermove', e => {
-  if (dragItem) { if (dragItem.noDrag) return; const dy = dragItem.sy - e.clientY; if (!dragItem.active && (dy>14 || Math.abs(e.clientX-dragItem.sx)>30 && dy>4)) dragItem.active=true; if (dragItem.active) { ghostPos=ghostFrom(e); dragItem.cy=e.clientY; } return; }
+  if (dragItem) { if (dragItem.noDrag) return; const dy = dragItem.sy - e.clientY; if (!dragItem.active && dy>6 && dy>Math.abs(e.clientX-dragItem.sx)*.6) dragItem.active=true; if (dragItem.active) { ghostPos=ghostFrom(e); dragItem.cy=e.clientY; } return; }
   const p = pointers.get(e.pointerId); if (!p) return;
-  const dy = e.clientY - p.y; p.x=e.clientX; p.y=e.clientY;
-  if (gesture==='pan' || gesture==='pan2') { const d = (gesture==='pan2' ? dy/pointers.size : dy)*dpr/scale; cam.y -= d; cam.vy = -d; lastPan=performance.now(); clampCam(); }
+  const dx = (e.clientX - p.x)*dpr/scale, dy = (e.clientY - p.y)*dpr/scale; p.x=e.clientX; p.y=e.clientY;
+  if (gesture==='pan') { cam.x -= dx; cam.y -= dy; cam.vx = -dx; cam.vy = -dy; lastPan=performance.now(); clampCam(); }
+  else if (gesture==='pan2') {
+    if (pointers.size<2) { pinch=null; return; }
+    const n = pinchState();
+    if (pinch) { const wx=cam.x+pinch.x*dpr/scale, wy=cam.y+pinch.y*dpr/scale; cam.zoom=Math.max(1,Math.min(3.5,cam.zoom*n.d/pinch.d)); scale=cv.width/W*cam.zoom; cam.x=wx-n.x*dpr/scale; cam.y=wy-n.y*dpr/scale; clampCam(); }
+    pinch = n;
+  }
   else if (gesture==='dig') digAt = toWorld(e.clientX,e.clientY);
   else if (gesture==='stamp') ghostPos = ghostFrom(e);
 });
 function endPointer(e) {
   if (dragItem) {
-    if (dragItem.active) { const trayTop = innerHeight - $('tray').offsetHeight; if (e.clientY < trayTop && ghostPos) place(dragItem.id, ghostPos.x, ghostPos.y); }
-    else { const it=ITEM[dragItem.id]; if (it.kind==='action') doAction(it.id); else { tool = (tool===it.id && it.id!=='pan') ? 'pan' : it.id; if (it.kind==='stamp') toast(`${it.name}: tap to place, or drag from tray to drop`); else if (it.id==='dig') toast('DIG: drag through earth. Two fingers to scroll.'); } refreshTray(); }
+    if (dragItem.active && e.type==='pointerup') { const trayTop = innerHeight - $('tray').offsetHeight; if (e.clientY < trayTop && ghostPos) place(dragItem.id, ghostPos.x, ghostPos.y); }
+    else { const it=ITEM[dragItem.id]; if (it.kind==='action') doAction(it.id); else if (it.kind==='stamp') toast(`Drag ${it.name} up out of the tray to place it`); else { tool = (tool===it.id && it.id!=='pan') ? 'pan' : it.id; if (it.id==='dig') toast('DIG: drag through earth. Two fingers scroll & pinch-zoom.'); } refreshTray(); }
     dragItem=null; ghostPos=null; return;
   }
   if (!pointers.has(e.pointerId)) return;
-  pointers.delete(e.pointerId);
+  pointers.delete(e.pointerId); pinch=null;
   if (gesture==='stamp' && pointers.size===0 && ghostPos && e.type==='pointerup') place(tool, ghostPos.x, ghostPos.y);
-  if (pointers.size===0) { if (performance.now()-lastPan>80) cam.vy=0; gesture=null; digAt=null; ghostPos=null; }
+  if (pointers.size===0) { if (performance.now()-lastPan>80) { cam.vy=0; cam.vx=0; } gesture=null; digAt=null; ghostPos=null; }
 }
 addEventListener('pointerup', endPointer); addEventListener('pointercancel', endPointer);
 $('tray').addEventListener('pointerdown', e => { const el=e.target.closest('.item'); if (!el || state!=='play') return; sfx.init(); dragItem={ id:el.dataset.id, sx:e.clientX, sy:e.clientY, active:false }; if (ITEM[el.dataset.id].kind!=='stamp') dragItem.noDrag=true; });
-cv.addEventListener('wheel', e => { if (state!=='play') return; e.preventDefault(); cam.y += e.deltaY*dpr/scale*.5; clampCam(); }, {passive:false});
-document.addEventListener('touchmove', e => { if (!e.target.closest('#tray,.card')) e.preventDefault(); }, {passive:false});
+cv.addEventListener('wheel', e => { if (state!=='play') return; e.preventDefault(); if (e.ctrlKey) zoomAt(cam.zoom*Math.exp(-e.deltaY*.01), e.clientX, e.clientY); else { cam.x += e.deltaX*dpr/scale*.5; cam.y += e.deltaY*dpr/scale*.5; clampCam(); } }, {passive:false});
+document.addEventListener('touchmove', e => { if ((dragItem && dragItem.active) || !e.target.closest('#tray,.card')) e.preventDefault(); }, {passive:false});
 document.addEventListener('gesturestart', e => e.preventDefault());
 mini.addEventListener('pointerdown', e => { const r=mini.getBoundingClientRect(); const jump = ev => { cam.y = (ev.clientY-r.top)/r.height*H - viewRows()/2; cam.vy=0; clampCam(); }; jump(e); const mv=ev=>jump(ev), up=()=>{removeEventListener('pointermove',mv); removeEventListener('pointerup',up);}; addEventListener('pointermove',mv); addEventListener('pointerup',up); e.stopPropagation(); });
 addEventListener('keydown', e => { if (e.key==='Escape' && state==='play') pause(); if (e.key==='Escape' && state==='paused') resume(); });
@@ -929,7 +943,7 @@ function resetEntities(){ pumps=[]; mgs=[]; soldiers=[]; shells=[]; particles=[]
 function startDemo() {
   demo = true; state='menu'; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(true);
-  game.t=0; cam.y = -10; demoStart = tick;
+  game.t=0; cam.y = -10; cam.x = 0; cam.zoom = 1; demoStart = tick;
 }
 let demoStart=0;
 function startGame() {
@@ -940,10 +954,10 @@ function startGame() {
   ITEM.fortify.cost = 120;
   gold = 140; tool='pan'; state='play';
   ['menu','help','over','pause'].forEach(s=>show(s,false)); show('hud',true); show('tray',true); show('mini',true);
-  buildTray(); resize();
+  cam.zoom=1; cam.x=0; buildTray(); resize();
   cam.y = 0; cam.vy=0; clampCam();
   const tips = [
-    [1,'Drag to scroll down to your COMMAND POST.'],
+    [1,'Drag to scroll down to your COMMAND POST. Pinch to zoom.'],
     [7,'Tap DIG and drag to tunnel. Gold ore (bright) pays ◆.'],
     [14,'Unbraced ceilings crumble. Drag a PROP from the tray into a tunnel.'],
     [21,'Shells incoming soon. Earth, BAGS and CONCRETE absorb blasts.'],
@@ -1012,7 +1026,7 @@ function frame(now) {
     acc += dt; let n=0; while (acc >= 1/60 && n<3) { update(); acc -= 1/60; n++; } if (n===3) acc=0;
   }
   if (state==='menu') { const tgt = Math.max(-10, (hq.y - viewRows()*.55) * (.5 - .5*Math.cos((tick-demoStart)/700))); cam.y += (tgt-cam.y)*.02; }
-  else if (state==='play' && pointers.size===0) { cam.y += cam.vy; cam.vy *= .92; if (Math.abs(cam.vy)<.01) cam.vy=0;
+  else if (state==='play' && pointers.size===0) { cam.y += cam.vy; cam.x += cam.vx; cam.vy *= .92; cam.vx *= .92; if (Math.abs(cam.vy)<.01) cam.vy=0; if (Math.abs(cam.vx)<.01) cam.vx=0;
     if (dragItem && dragItem.active) { const ty=innerHeight-$('tray').offsetHeight; if (dragItem.cy < 110) cam.y -= 1.2; else if (dragItem.cy > ty-40) cam.y += 1.2; }
     clampCam(); }
   if (gesture==='dig' || gesture==='stamp') { const p=[...pointers.values()][0]; if (p) { const ty=innerHeight-$('tray').offsetHeight; if (p.y < 100) cam.y -= .8; else if (p.y > ty-30) cam.y += .8; clampCam(); if (gesture==='dig') digAt=toWorld(p.x,p.y); } }
