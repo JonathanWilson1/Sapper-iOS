@@ -132,7 +132,7 @@ const SOLID = new Uint8Array(NT).fill(1); SOLID[E]=0; SOLID[WATER]=0; SOLID[FIRE
 //            E  SOIL SAND ROCK WATR TIMB BAGS CONC GOLD RUBB FIRE HQ  PUMP MG   BED GRAS LAMP
 const RES  = [0, 1,   .8,  2.5, .4,  1.5, 3.5, 6,   2.5, .6,  0,   5,  3,   3,   99, 1,   .5, 3];
 const HARD = [0, 0,   0,   2.5, 0,   1,   2.5, 5.5, 2.5, 0,   0,   99, 3,   3,  999, 0,   0,  2];
-const DIGT = [0, 4,   2,   30,  0,   0,   0,   0,   24,  2,   0,   0,  0,   0,   0,  4,   0,  0];
+const DIGT = [0, 3,   2,   22,  0,   0,   0,   0,   18,  2,   0,   0,  0,   0,   0,  3,   0,  0];
 const SUPPORTS = new Uint8Array(NT); SUPPORTS[TIMBER]=1; SUPPORTS[CONC]=1; SUPPORTS[BAGS]=1; SUPPORTS[HQ]=1;
 
 // ---------- world state
@@ -317,6 +317,8 @@ function updateDrills() {
     // shore the shaft behind it: posts down both walls, a cross-brace every 8 rows
     const ty=d.y; prop[ty*W+d.x]=1; prop[ty*W+d.x+DRILL_W-1]=1;
     if ((d.depth=(d.depth||0)+1)%8===0) for (let c=0;c<DRILL_W;c++) prop[ty*W+d.x+c]=1;
+    // solid timber lining on the outside of both walls so loose ground and water can't run in sideways
+    for (const lx of [d.x-1, d.x+DRILL_W]) for (const ly of [ty, by]) if (inB(lx,ly)) { const li=ly*W+lx, lt=g[li]; if (lt===E||lt===SOIL||lt===GRASS||lt===SAND||lt===RUBBLE||lt===WATER) { g[li]=TIMBER; hp[li]=0; } }
     d.y++; d.rem--;
     if (d.rem%4===0) sfx.dig();
     queueRockCheck(d.x+DRILL_W/2,by,5);
@@ -396,7 +398,7 @@ function place(id, cx, cy, freeOfCharge) {
   if (id==='mg')   { const c=s.cells[0]; mgs.push({ x:c[0], y:c[1], cool:0, ang:-Math.PI/2, flash:0 }); }
   if (id==='gen')  { const c=s.cells[0]; addGen(c[0],c[1]); }
   if (id==='drill'){ const c=s.cells[0]; drills.push({ x:c[0], y:c[1], rem:0, work:0 }); }
-  if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); if (id==='gen') { it.cost += 100; buildTray(); toast(`Generator online: +${Math.round(gens[gens.length-1].rate*60)} ◆/min`); } }
+  if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); if (id==='gen') { it.cost += 30; buildTray(); toast(`Generator online: +${Math.round(gens[gens.length-1].rate*60)} ◆/min`); } }
   return true;
 }
 function doAction(id) {
@@ -720,7 +722,7 @@ function popup(x,y,txt){ popups.push({x,y,txt,life:60}); }
 let digAt = null, digSoundT = 0;
 function applyDig() {
   if (!digAt) return;
-  const R=2.7, cx=digAt.x, cy=digAt.y; let any=false;
+  const R=3.4, cx=digAt.x, cy=digAt.y; let any=false;
   for (let y=Math.floor(cy-R); y<=cy+R; y++) for (let x=Math.floor(cx-R); x<=cx+R; x++) {
     if (!inB(x,y) || (x+.5-cx)**2+(y+.5-cy)**2 > R*R) continue;
     const i=y*W+x, t=g[i], need=DIGT[t];
@@ -936,7 +938,7 @@ function drawEntities(s) {
     ctx.fillStyle='#000a'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s+1, ly*s+1);
     ctx.fillStyle = r>0 ? '#f0d68a' : '#e05a40'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s, ly*s);
   }
-  if (digAt && state==='play') { ctx.strokeStyle='#e8d6a088'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.arc(digAt.x*s,digAt.y*s,2.7*s,0,6.29); ctx.stroke(); }
+  if (digAt && state==='play') { ctx.strokeStyle='#e8d6a088'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.arc(digAt.x*s,digAt.y*s,3.4*s,0,6.29); ctx.stroke(); }
 }
 function drawOverlayUI(s) {
   // incoming shell markers at the top edge
