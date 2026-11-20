@@ -264,7 +264,11 @@ function buildBase(isDemo) {
 
 // ---------- generators: the thing you protect. Each earns ◆; shallow ones earn more but take the shelling.
 const GEN_W = 14, GEN_H = 7, GEN_MAX = 110;
-function genRate(x,y){ const d=Math.max(0, y - surfOrig[Math.max(0,Math.min(W-1,x|0))]); return d>GEN_MAX ? 0 : 2*(1-d/140); }
+function genRate(x,y){ const d=Math.max(0, y - surfOrig[Math.max(0,Math.min(W-1,x|0))]); return d>GEN_MAX ? 0 : 1.2*(1-d/140); }
+// generators packed close together share the same supply line: each one's output is split with its neighbours
+const GEN_SPACING = 30;
+function crowd(cx,cy,skip){ let n=0; for (const o of gens) if (o!==skip && Math.hypot(o.x+o.w/2-cx, o.y+o.h/2-cy) < GEN_SPACING) n++; return n; }
+const genEff = gn => gn.rate / (1 + crowd(gn.x+gn.w/2, gn.y+gn.h/2, gn)) * (gn.oc?2:1);
 function genAt(x,y){ for (const gn of gens) if (x>=gn.x && x<gn.x+gn.w && y>=gn.y && y<gn.y+gn.h) return gn; return null; }
 function addGen(x,y){ const gn={ x, y, w:GEN_W, h:GEN_H, hp:100, max:100, acc:0, n:0, hit:0, oc:0, cool:0, rate:genRate(x+GEN_W/2, y+GEN_H) }; gens.push(gn); return gn; }
 const OC_TIME = 20*60, OC_COOL = 30*60;
@@ -288,7 +292,7 @@ function updateGens() {
       if (rand() < .06) { const x = gn.x-1 + (rand()*(gn.w+2)|0), y = gn.y-2 + (rand()*(gn.h+2)|0); if (inB(x,y) && g[y*W+x]===E) { g[y*W+x]=FIRE; hp[y*W+x]=50+(rand()*60|0); } }
       if (rand() < .3) particles.push({x:gn.x+rand()*gn.w, y:gn.y, vx:(rand()-.5)*.4, vy:-.3-rand()*.3, life:25, max:25, k:'spark'});
     } else if (gn.cool>0) gn.cool--;
-    gn.acc += gn.rate*(gn.oc?2:1)/60;
+    gn.acc += genEff(gn)/60;
     if (gn.acc>=1) { gn.acc-=1; gold+=1; if (++gn.n%5===0) popup(gn.x+gn.w/2, gn.y-1, '+◆'); }
     if (tick%30===0) {
       let wet=0; for (let y=gn.y-1;y<=gn.y+gn.h;y++) for (let x=gn.x-1;x<=gn.x+gn.w;x++) if (inB(x,y) && g[y*W+x]===WATER) wet++;
@@ -307,8 +311,8 @@ function destroyGen(gn) {
 // ---------- ore: worth ◆4 near the surface rising to ◆10 deep down, with the odd big nugget
 function mineOre(x,y) {
   const d = Math.max(0, y - surfOrig[x]);
-  let v = Math.round(4 + 6*Math.min(1, d/250));
-  if (rand() < .03) { v = 25; popup(x,y,'NUGGET +25'); sfx.coin(); sfx.coin(); }
+  let v = Math.round(5 + 10*Math.min(1, d/250));
+  if (rand() < .03) { v = 40; popup(x,y,'NUGGET +40'); sfx.coin(); sfx.coin(); }
   else if (rand() < .3) popup(x,y,'+'+v);
   gold += v; game.mined += v; sfx.coin();
 }
@@ -421,7 +425,7 @@ function place(id, cx, cy, freeOfCharge) {
   if (id==='mg')   { const c=s.cells[0]; mgs.push({ x:c[0], y:c[1], cool:0, ang:-Math.PI/2, flash:0 }); }
   if (id==='gen')  { const c=s.cells[0]; addGen(c[0],c[1]); }
   if (id==='drill'){ const c=s.cells[0]; drills.push({ x:c[0], y:c[1], rem:0, work:0 }); }
-  if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); if (id==='gen') { it.cost += 30; buildTray(); toast(`Generator online: +${Math.round(gens[gens.length-1].rate*60)} ◆/min`); } }
+  if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); if (id==='gen') { it.cost += 30; buildTray(); { const gn=gens[gens.length-1], n=crowd(gn.x+gn.w/2,gn.y+gn.h/2,gn); toast(`Generator online: +${Math.round(genEff(gn)*60)} ◆/min` + (n?` (crowded — space them ${GEN_SPACING}+ apart)`:'')); } } }
   return true;
 }
 function doAction(id) {
@@ -995,7 +999,8 @@ function drawEntities(s) {
   if (gh && dragItem && dragItem.id==='gen' && ghostPos) {
     ctx.save(); ctx.strokeStyle='rgba(230,190,74,.55)'; ctx.lineWidth=Math.max(1,dpr); ctx.setLineDash([s*2,s*2]); ctx.beginPath();
     for (let x=0;x<W;x++) { const y=(surfOrig[x]+GEN_MAX)*s; x ? ctx.lineTo(x*s,y) : ctx.moveTo(0,y); } ctx.stroke(); ctx.restore();
-    const c0 = gh.cells[0], r = genRate(c0[0]+GEN_W/2, c0[1]+GEN_H), lx = c0[0]+GEN_W/2, ly = c0[1]-2;
+    const c0 = gh.cells[0], n = crowd(c0[0]+GEN_W/2, c0[1]+GEN_H/2, null), r = genRate(c0[0]+GEN_W/2, c0[1]+GEN_H)/(1+n), lx = c0[0]+GEN_W/2, ly = c0[1]-2;
+    if (n && r>0) { ctx.font=`bold ${Math.round(Math.max(15*dpr, s*3.5))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center'; ctx.fillStyle='#e05a40'; ctx.fillText(`CROWDED ÷${n+1}`, lx*s, (ly-4)*s); }
     ctx.font = `bold ${Math.round(Math.max(15*dpr, s*3.5))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center';
     ctx.fillStyle='#000a'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s+1, ly*s+1);
     ctx.fillStyle = r>0 ? '#f0d68a' : '#e05a40'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s, ly*s);
@@ -1093,7 +1098,7 @@ function updateHUD() {
   $('goldStat').textContent = '◆ '+gold;
   const tot=gens.reduce((a,gn)=>a+Math.max(0,gn.hp),0), mx=gens.reduce((a,gn)=>a+gn.max,0)||1, weak=gens.reduce((a,gn)=>Math.min(a,gn.hp/gn.max),1);
   $('hqFill').style.width=(tot/mx*100)+'%'; $('hqBar').classList.toggle('hurt', weak<.35);
-  const rate=gens.reduce((a,gn)=>a+gn.rate*(gn.oc?2:1),0)*60;
+  const rate=gens.reduce((a,gn)=>a+genEff(gn),0)*60;
   $('hqText').textContent = `GEN ${gens.length} · ${Math.round(rate)}◆/m`;
   refreshTray();
 }
