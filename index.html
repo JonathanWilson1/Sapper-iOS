@@ -89,8 +89,9 @@
 <div id="help" class="screen" hidden>
   <div class="card">
     <h2>FIELD MANUAL</h2>
-    <p><em>Drag</em> open ground to scroll. <em>Two fingers</em> always scroll and pinch to zoom.</p>
-    <p><em>Dig</em>: touch earth beside any tunnel and drag. Rock is slow. Gold ore pays ◆.</p>
+    <p><em>Two fingers</em> scroll and pinch to zoom.</p>
+    <p><em>One finger digs</em>: drag through earth beside any tunnel. Rock is slow. Gold ore pays ◆.</p>
+    <p>Wide caverns cave in. Undercut a rock and it drops in one piece.</p>
     <p><em>DEPOT</em> earns ◆ over time. Shallow depots pay most but sit under the shells; none work below the dashed line.</p>
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>BAGS</em> and <em>CONCRETE</em> soak up shellfire.</p>
@@ -389,11 +390,20 @@ function stepSim() {
         case SOIL: case GRASS: {
           const b=g[i+W];
           if ((b===E||b===WATER) && !sup[i]) {
-            let p=.0005;
+            // the wider the open span beneath, the faster the ceiling gives way
+            const j=i+W; let l=0, r=0;
+            while (l<30 && x-l-1>=0 && !SOLID[g[j-l-1]]) l++;
+            while (r<30 && x+r+1<W && !SOLID[g[j+r+1]]) r++;
+            const span=l+r+1;
+            let p = span<=5 ? .00015 : Math.min(.03, .00015*Math.pow(span/5,3));
             const above = y>0 ? g[i-W] : E;
-            if (above===E || above===WATER) p=.012;
+            if (above===E || above===WATER) p=Math.max(p,.012);
             if ((x===0||!SOLID[g[i-1]]) && (x===W-1||!SOLID[g[i+1]])) p=.25;
-            if (rand()<p) g[i]=RUBBLE;
+            if (rand()<p) {
+              g[i]=RUBBLE;
+              for (let k=1;k<=4 && y-k>=0;k++) { const u=i-k*W; if ((g[u]===SOIL||g[u]===GRASS) && !sup[u] && rand()<.7) g[u]=RUBBLE; else break; }
+              if (span>8 && rand()<.3) { sfx.crumble(); particles.push({x:x+.5,y:y+1,vx:0,vy:.02,life:60,max:60,k:'smoke'}); }
+            }
           }
           break;
         }
@@ -416,6 +426,63 @@ function stepSim() {
           break;
         }
       }
+    }
+  }
+}
+
+// ---------- rigid rock bodies: a rock blob falls as one piece once <20% of its underside rests on anything
+const rockChecks = [], bodies = [], rmark = new Uint32Array(W*H); let rgen = 0;
+const isRock = t => t===ROCK || t===GOLD;
+function queueRockCheck(x,y,r){ rockChecks.push([x|0,y|0,r]); }
+function processRockChecks() {
+  if (!rockChecks.length) return;
+  rgen++;
+  for (const [cx,cy,r] of rockChecks.splice(0)) {
+    for (let y=cy-r;y<=cy+r;y++) for (let x=cx-r;x<=cx+r;x++) {
+      if (!inB(x,y)) continue; const i=y*W+x;
+      if (!isRock(g[i]) || rmark[i]===rgen) continue;
+      // flood fill the blob (capped: big strata count as anchored bedrock)
+      const cells=[i]; rmark[i]=rgen; let big=false;
+      for (let k=0;k<cells.length;k++) { const c=cells[k], cx2=c%W;
+        for (const n of [c-1,c+1,c-W,c+W]) { if (n<0||n>=W*H) continue; if ((n===c-1&&cx2===0)||(n===c+1&&cx2===W-1)) continue;
+          if (isRock(g[n]) && rmark[n]!==rgen) { rmark[n]=rgen; cells.push(n); if (cells.length>900) { big=true; break; } } }
+        if (big) break; }
+      if (big) continue;
+      const set=new Set(cells); let bottom=0; const holds=[];
+      for (const c of cells) { const j=c+W; if (j>=W*H) { bottom++; holds.push(-1); continue; } if (set.has(j)) continue; bottom++; if (SOLID[g[j]]) holds.push(j); }
+      if (!bottom || holds.length/bottom >= .2) continue;
+      // the last slivers of soft ground get crushed; anything hard (rock, concrete, timber...) still holds it
+      const soft = t => t===SOIL||t===GRASS||t===SAND||t===RUBBLE;
+      if (holds.some(j => j<0 || !soft(g[j]))) continue;
+      for (const j of holds) { particles.push({x:j%W+.5,y:(j/W|0)+.5,vx:(rand()-.5)*.4,vy:-.1,life:60,max:60,k:'debris',t:RUBBLE}); g[j]=E; }
+      bodies.push({ cells, set, vy:0, fy:0 });
+    }
+  }
+}
+function updateBodies() {
+  for (let k=bodies.length-1;k>=0;k--) {
+    const b=bodies[k];
+    b.vy=Math.min(b.vy+.06,2); b.fy+=b.vy;
+    let landed=false;
+    while (b.fy>=1 && !landed) {
+      b.fy-=1;
+      for (const c of b.cells) { const j=c+W; if (j>=W*H || (!b.set.has(j) && SOLID[g[j]])) { landed=true; break; } }
+      if (landed) break;
+      b.cells.sort((a,c)=>c-a);   // bottom rows first, so each cell drops into the space below it
+      for (const c of b.cells) { const j=c+W; let t=g[c]; g[c]=g[j]; g[j]=t; t=sh[c]; sh[c]=sh[j]; sh[j]=t; hp[c]=0; hp[j]=0; }
+      b.cells=b.cells.map(c=>c+W); b.set=new Set(b.cells);
+    }
+    if (landed) {
+      bodies.splice(k,1);
+      const n=b.cells.length, c0=b.cells[0], x=c0%W, y=(c0/W)|0;
+      if (b.vy>.5) {
+        for (const c of b.cells) { const j=c+W; if (j<W*H && !b.set.has(j)) { if (g[j]===HQ && hq) { hq.hp-=n*.04; hq.hit=10; } else if (g[j]===TIMBER||g[j]===LAMP||g[j]===PUMP||g[j]===MG||g[j]===DEPOT) g[j]=RUBBLE; } }
+        const near = 1 - Math.min(1, Math.abs(y - (cam.y + viewRows()/2)) / viewRows());
+        shake=Math.min(12, shake+Math.sqrt(n)*.5*Math.max(.2,near)); sfx.boom(Math.min(10,2+Math.sqrt(n)*.6), Math.max(.15,near)*.7);
+        if (near>.4) haptic(n>80?'heavy':'medium');
+        for (let q=0;q<Math.min(30,n/3);q++) particles.push({x:x+(rand()-.5)*8,y:y,vx:(rand()-.5)*.2,vy:-.05-rand()*.1,life:100,max:100,k:'smoke'});
+      }
+      queueRockCheck(x,y,6);
     }
   }
 }
@@ -445,6 +512,7 @@ function explode(x, y, r, opt={}) {
       else { g[i]=E; hp[i]=0; }
     }
   }
+  queueRockCheck(x,y,R+3);
   if (hqMax>0 && hq) { hq.hp -= hqMax*1.7; hq.hit=12; haptic('heavy'); }
   for (const s of soldiers) if (Math.hypot(s.x-x, s.y-2-y) < r*1.25) s.hp = 0;
   flashes.push({x,y,r:r*3.2,life:14,max:14});
@@ -602,7 +670,7 @@ function applyDig() {
     if (!need) continue;
     if (!((x>0&&!SOLID[g[i-1]]) || (x<W-1&&!SOLID[g[i+1]]) || (y>0&&!SOLID[g[i-W]]) || (y<H-1&&!SOLID[g[i+W]]))) continue;
     if (++hp[i] >= need) {
-      g[i]=E; hp[i]=0; any=true;
+      g[i]=E; hp[i]=0; any=true; if (tick%6===0 || isRock(t)) queueRockCheck(x,y,4);
       if (t===GOLD) { gold+=2; game.mined+=2; if (rand()<.4) popup(x,y,'+◆'); sfx.coin(); }
       if (rand()<.25) particles.push({x:x+.5,y:y+.5,vx:(rand()-.5)*.3,vy:-rand()*.3,life:20,max:20,k:'spark',dirt:1});
     }
@@ -860,6 +928,7 @@ const sfx = {
   mg() { if (!this.ctx || this.ctx.currentTime-this.lastMg<.07) return; this.lastMg=this.ctx.currentTime; this.nz(.06,'highpass',900,.18); },
   dig() { this.nz(.05,'bandpass',500+Math.random()*400,.08,2); },
   coin() { const c=this.ctx; if (!c || Math.random()<.6) return; const o=c.createOscillator(), gn=c.createGain(), t=c.currentTime; o.type='square'; o.frequency.setValueAtTime(880,t); o.frequency.setValueAtTime(1320,t+.05); gn.gain.setValueAtTime(.03,t); gn.gain.exponentialRampToValueAtTime(.001,t+.15); o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t+.16); },
+  crumble() { if (!this.ctx || this.ctx.currentTime-(this.lastCr||0)<.25) return; this.lastCr=this.ctx.currentTime; this.nz(.35,'lowpass',220,.25); },
   thunk() { this.nz(.12,'lowpass',400,.35); },
   deny() { const c=this.ctx; if (!c) return; const o=c.createOscillator(), gn=c.createGain(), t=c.currentTime; o.type='square'; o.frequency.value=110; gn.gain.setValueAtTime(.05,t); gn.gain.exponentialRampToValueAtTime(.001,t+.18); o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t+.2); },
   rain(on) { const c=this.ctx; this.raining=on; if (!c) return;
@@ -908,7 +977,7 @@ function updateHUD() {
 
 // ---------- input
 const pointers = new Map();
-let gesture = null, ghostPos = null, dragItem = null, lastPan = 0, pinch = null;
+let pendingAt = 0, gesture = null, ghostPos = null, dragItem = null, lastPan = 0, pinch = null;
 function pinchState(){ const ps=[...pointers.values()], a=ps[0], b=ps[1]||ps[0]; return { x:(a.x+b.x)/2, y:(a.y+b.y)/2, d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)) }; }
 function toWorld(cx, cy){ return { x: cam.x + cx*dpr/scale, y: cam.y + cy*dpr/scale }; }
 function ghost() {
@@ -933,7 +1002,7 @@ cv.addEventListener('pointerdown', e => {
   cam.vy = 0; cam.vx = 0;
   if (pointers.size>=2) { gesture='pan2'; digAt=null; pinch=pinchState(); return; }
   const w = toWorld(e.clientX,e.clientY);
-  if (canDigNear(w)) { gesture='dig'; digAt=w; } else gesture='pan';
+  gesture='pending'; pendingAt=performance.now();   // becomes a dig unless a second finger lands quickly
 });
 addEventListener('pointermove', e => {
   if (dragItem) {
@@ -975,7 +1044,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 
 // ---------- game flow
 function show(id, on){ $(id).hidden = !on; }
-function resetEntities(){ pumps=[]; mgs=[]; depots=[]; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
+function resetEntities(){ pumps=[]; mgs=[]; depots=[]; bodies.length=0; rockChecks.length=0; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
 function startDemo() {
   demo = true; state='menu'; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(true);
@@ -993,8 +1062,8 @@ function startGame() {
   cam.zoom=1; cam.x=0; buildTray(); resize();
   cam.y = 0; cam.vy=0; cam.x = hq.x+hq.w/2 - cv.width/scale/2; clampCam();
   const tips = [
-    [1,'Drag open ground to scroll down to your COMMAND POST. Pinch to zoom.'],
-    [7,'Touch earth beside a tunnel and drag to dig. Bright gold ore pays ◆.'],
+    [1,'Two fingers to scroll down to your COMMAND POST. Pinch to zoom.'],
+    [7,'One finger digs — drag through earth beside a tunnel. Gold ore pays ◆.'],
     [14,'Unbraced ceilings crumble. Drag a PROP from the tray into a tunnel.'],
     [19,'DEPOTs earn ◆ over time — more near the surface, where the shells land.'],
     [26,'Earth, BAGS and CONCRETE absorb blasts.'],
@@ -1050,6 +1119,8 @@ let last = performance.now(), acc = 0, frameN = 0;
 function update() {
   stepSim();
   if (tick%10===0) computeSupport();
+  if (tick%6===0) processRockChecks();
+  updateBodies();
   updateShells(); updateSoldiers(); updateMachines(); updateParticles();
   if (state==='play') { game.t += 1/60; applyDig(); updateDirector(); if (hq.hp<=0) gameOver(); }
   else if (state==='menu') { game.t += 1/60; updateDemo(); if (tick-demoStart > 60*75) startDemo(); }
@@ -1065,11 +1136,12 @@ function frame(now) {
   if (state==='menu') { cam.x = Math.max(0, hq.x+hq.w/2 - cv.width/scale/2); const tgt = Math.max(-10, (hq.y - viewRows()*.55) * (.5 - .5*Math.cos((tick-demoStart)/700))); cam.y += (tgt-cam.y)*.02; }
   else if (state==='play' && pointers.size===0) { cam.y += cam.vy; cam.x += cam.vx; cam.vy *= .92; cam.vx *= .92; if (Math.abs(cam.vy)<.01) cam.vy=0; if (Math.abs(cam.vx)<.01) cam.vx=0;
     clampCam(); }
+  if (gesture==='pending' && pointers.size===1 && performance.now()-pendingAt>70) gesture='dig';
   if (gesture==='dig') { const p=[...pointers.values()][0]; if (p) digAt=toWorld(p.x,p.y); }
   render();
   if (state==='play') { updateHUD(); if (++frameN % 12 === 0) renderMini(); }
 }
-window.__sapper = { fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get hq(){return hq;}, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
+window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get hq(){return hq;}, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
 updateBest(); startDemo(); resize(); requestAnimationFrame(frame);
 </script>
 </body>
