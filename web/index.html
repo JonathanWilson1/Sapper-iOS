@@ -19,26 +19,26 @@
   button:active{transform:translateY(1px);background:#2c2218}
   #hud{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 6px) 8px 0;display:flex;gap:8px;align-items:center;pointer-events:none;z-index:5}
   #hud > *{pointer-events:auto}
-  #hud button{padding:6px 10px;font-size:12px;background:var(--panel)}
-  .stat{background:var(--panel);border:2px solid var(--edge);padding:5px 8px;font-weight:800;font-size:13px;letter-spacing:1px;white-space:nowrap}
+  #hud button{padding:7px 12px;font-size:15px;background:var(--panel)}
+  .stat{background:var(--panel);border:2px solid var(--edge);padding:6px 9px;font-weight:800;font-size:16px;letter-spacing:1px;white-space:nowrap}
   .gold{color:#e6bf4a}
-  #hqBar{flex:1;height:22px;background:var(--panel);border:2px solid var(--edge);position:relative;min-width:60px}
+  #hqBar{flex:1;height:30px;background:var(--panel);border:2px solid var(--edge);position:relative;min-width:60px}
   #hqFill{position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(#6f8a4a,#3f5228);transition:width .2s}
-  #hqBar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-shadow:1px 1px 0 #000}
+  #hqBar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-shadow:1px 1px 0 #000}
   #hqBar.hurt #hqFill{background:linear-gradient(#c0503a,#7a2418)}
-  #banner{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 48px);text-align:center;font-weight:900;font-size:18px;letter-spacing:3px;
+  #banner{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 48px);text-align:center;font-weight:900;font-size:24px;letter-spacing:3px;
     color:#f0d68a;text-shadow:2px 2px 0 #000,0 0 12px #b33a2a;opacity:0;transition:opacity .3s;pointer-events:none;z-index:4}
-  #banner small{display:block;font-size:11px;letter-spacing:2px;color:var(--ink);opacity:.85}
-  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 96px);max-width:86vw;background:var(--panel);
-    border:2px solid var(--edge);padding:8px 12px;font-size:12px;line-height:1.4;opacity:0;transition:opacity .3s;pointer-events:none;z-index:4;text-align:center}
-  #mini{position:fixed;right:6px;top:calc(env(safe-area-inset-top) + 44px);width:40px;height:92px;image-rendering:pixelated;border:2px solid var(--edge);z-index:5;background:#000}
+  #banner small{display:block;font-size:14px;letter-spacing:2px;color:var(--ink);opacity:.85}
+  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 104px);max-width:86vw;background:var(--panel);
+    border:2px solid var(--edge);padding:10px 14px;font-size:16px;line-height:1.4;opacity:0;transition:opacity .3s;pointer-events:none;z-index:4;text-align:center}
+  #mini{position:fixed;right:6px;top:calc(env(safe-area-inset-top) + 52px);width:40px;height:92px;image-rendering:pixelated;border:2px solid var(--edge);z-index:5;background:#000}
   #tray{position:fixed;left:0;right:0;bottom:0;padding:6px 6px calc(env(safe-area-inset-bottom) + 6px);background:linear-gradient(#1a140ff0,#0d0a07);
     border-top:2px solid var(--edge);display:flex;gap:4px;overflow:hidden;touch-action:none;z-index:5}
   #tray::-webkit-scrollbar{display:none}
-  .item{flex:1 1 0;min-width:0;height:58px;background:#211912;border:2px solid var(--edge);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative}
-  .item canvas{width:28px;height:21px;image-rendering:pixelated;pointer-events:none}
-  .item b{font-size:7px;letter-spacing:0;white-space:nowrap;pointer-events:none}
-  .item i{font-style:normal;font-size:9.5px;color:#e6bf4a;pointer-events:none}
+  .item{flex:1 1 0;min-width:0;height:74px;background:#211912;border:2px solid var(--edge);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative}
+  .item canvas{width:40px;height:30px;image-rendering:pixelated;pointer-events:none}
+  .item b{font-size:11px;letter-spacing:0;white-space:nowrap;pointer-events:none}
+  .item i{font-style:normal;font-size:13px;color:#e6bf4a;pointer-events:none}
   .item.sel{border-color:var(--brass);background:#2e2416;box-shadow:inset 0 0 0 1px #000}
   .item.poor i{color:#8a5a4a}
   .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:10;
@@ -48,9 +48,9 @@
   #menu button,.screen button{min-width:220px;background:#1b140ecc}
   #menu button.primary,.screen button.primary{background:#5a2a1c;border-color:#8a4a32;color:#f3dfae}
   #title{width:min(86vw,520px);image-rendering:pixelated;filter:drop-shadow(0 4px 0 #000)}
-  .tag{margin:0 0 18px;font-size:12px;letter-spacing:3px;color:#cdb98a;text-shadow:1px 1px 0 #000}
-  .small{font-size:11px;letter-spacing:2px;opacity:.75}
-  .card{background:var(--panel);border:2px solid var(--edge);padding:18px;max-width:440px;text-align:left;font-size:13px;line-height:1.55;max-height:70vh;overflow:auto}
+  .tag{margin:0 0 18px;font-size:14px;letter-spacing:3px;color:#cdb98a;text-shadow:1px 1px 0 #000}
+  .small{font-size:14px;letter-spacing:2px;opacity:.75}
+  .card{background:var(--panel);border:2px solid var(--edge);padding:18px;max-width:440px;text-align:left;font-size:16px;line-height:1.5;max-height:70vh;overflow:auto}
   .card h2{margin:0 0 10px;letter-spacing:3px;font-size:16px;color:#f0d68a}
   .card p{margin:0 0 9px}
   .card em{color:#e6bf4a;font-style:normal;font-weight:800}
@@ -95,9 +95,9 @@
     <p><em>GENERATORs</em> earn ◆. Shallow ones pay most but sit under the shells; none work below the dashed line.</p>
     <p>Tap a <em>GENERATOR</em> to overcharge it: double output for 20s, but sparks start fires that burn props.</p>
     <p>Gold ore is worth ◆4 near the top, up to ◆10 deep down, with rare ◆25 nuggets.</p>
-    <p><em>DRILL</em>: tap it to bore 20 cells straight down for ◆10, mining any ore it passes.</p>
+    <p>Tap your <em>DRILL</em> to bore 20 cells straight down for ◆10, mining any ore it passes. The deep half of the map is rich in gold.</p>
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
-    <p><em>Sand</em> pours. <em>Water</em> floods. <em>BAGS</em> and <em>CONCRETE</em> soak up shellfire. Drag <em>CONCRETE</em> out and draw with it.</p>
+    <p><em>Sand</em> pours. <em>Water</em> floods. <em>CONCRETE</em> soaks up shellfire — tap it, then draw with one finger.</p>
     <p><em>PUMP</em> drains floods. <em>MG NEST</em> cuts down raiders.</p>
     <p>Drag items up out of the tray to place them. <em>Pinch</em> to zoom.</p>
     <p>Lose every <em>GENERATOR</em> and the line falls. Survive as long as you can.</p>
@@ -220,6 +220,7 @@ function genWorld(s) {
     if (d>85 && fbm(x*.08,y*.1,s+37) > .76) { t=WATER; wall=1; }
     if (t===ROCK && fbm(x*.22,y*.22,s+51) > .79 - d*.00025) t=GOLD;
     if (t===SOIL && d>40 && r()<.0015) t=GOLD;
+    if (y>H/2 && (t===SOIL||t===ROCK) && fbm(x*.16,y*.16,s+77) > .80 - (y-H/2)*.0004) t=GOLD;   // richer seams in the deep half
     if (y >= H-3 - (hash2(x,0,s)*3|0)) { t=BED; wall=2; }
     g[i]=t; bgc[i]=wall;
   }
@@ -353,13 +354,10 @@ function updateDrills() {
 // ---------- structures / stamps
 const ITEMS = [
   { id:'prop',     name:'PROP',    cost:10,  kind:'stamp' },
-  { id:'bags',     name:'BAGS',    cost:8,   kind:'stamp' },
   { id:'concrete', name:'CONCRETE',cost:1,   kind:'draw' },
   { id:'pump',     name:'PUMP',    cost:40,  kind:'stamp' },
   { id:'mg',       name:'MG', cost:60,  kind:'stamp' },
-  { id:'drill',    name:'DRILL',   cost:30,  kind:'stamp' },
-  { id:'gen',      name:'GENERATOR',cost:100, kind:'stamp' },
-  { id:'repair',   name:'REPAIR',  cost:40,  kind:'action' },
+  { id:'gen',      name:'GEN',cost:100, kind:'stamp' },
 ];
 const ITEM = Object.fromEntries(ITEMS.map(i=>[i.id,i]));
 const free = (x,y) => inB(x,y) && !SOLID[g[idx(x,y)]];
@@ -618,19 +616,21 @@ function explode(x, y, r, opt={}) {
 }
 
 // ---------- shells / meteors
+const isMet = k => k==='meteor' || k==='giant';
 function spawnShell(kind, x) {
-  const K = { light:{r:6,pen:0}, howitzer:{r:9,pen:4}, heavy:{r:13,pen:9}, meteor:{r:32,pen:22}, buster:{r:22,pen:40} }[kind];
+  const K = { light:{r:6,pen:0}, howitzer:{r:9,pen:4}, heavy:{r:13,pen:9}, meteor:{r:32,pen:22}, giant:{r:50,pen:34}, buster:{r:22,pen:40} }[kind];
   const s = { kind, x, y:-170-rand()*40, vx:(rand()-.5)*.25, vy:1.1, r:K.r, pen:K.pen + Math.floor(game.intensity-1), whistled:false };
-  if (kind==='meteor') { s.vx = (rand()<.5?-1:1)*(.5+rand()*.4); s.x = x - s.vx*150; s.vy=1.4; s.y=-160; }
+  if (isMet(kind)) { s.vx = (rand()<.5?-1:1)*(.5+rand()*.4); s.x = x - s.vx*150; s.vy=1.4; s.y=-160; }
   shells.push(s);
   return s;
 }
 function updateShells() {
   for (let k=shells.length-1;k>=0;k--) {
     const s=shells[k];
-    s.vy += s.kind==='meteor'?.01:.025;
+    s.vy += isMet(s.kind)?.01:.025;
     if (!s.whistled && s.y > cam.y-60 && s.kind!=='meteor') { s.whistled=true; sfx.whistle(s.kind==='buster'); }
-    if (s.kind==='meteor' && rand()<.9) particles.push({x:s.x,y:s.y,vx:-s.vx*.2+(rand()-.5)*.2,vy:-s.vy*.2,life:30,max:30,k:'spark'});
+    if (s.kind==='giant') for (let q=0;q<3;q++) particles.push({x:s.x+(rand()-.5)*5,y:s.y+(rand()-.5)*5,vx:-s.vx*.2+(rand()-.5)*.3,vy:-s.vy*.2,life:45,max:45,k:'spark'});
+    if (isMet(s.kind) && rand()<.9) particles.push({x:s.x,y:s.y,vx:-s.vx*.2+(rand()-.5)*.2,vy:-s.vy*.2,life:30,max:30,k:'spark'});
     const n = Math.ceil(Math.hypot(s.vx,s.vy)*2);
     let dead=false;
     for (let j=0;j<n && !dead;j++) {
@@ -642,7 +642,7 @@ function updateShells() {
       if (SOLID[t]) {
         if (s.pen>0 && !s.breached && (t===SOIL||t===GRASS||t===SAND||t===RUBBLE)) { s.pen -= 1; s.vy*=.93; continue; }
         if (s.kind==='buster' && s.pen>0 && t!==BED && !(s.breached && t!==CONC)) { if (t===CONC) s.breached=true; s.pen -= Math.max(1, RES[t]); s.vy*=.95; continue; }   // punches through the slab, then goes off on whatever it was protecting
-        explode(s.x, s.y, s.r, { fire: s.kind==='meteor' ? 1.5 : s.kind==='heavy'||s.kind==='buster' ? .3 : .12 });
+        explode(s.x, s.y, s.r, { fire: isMet(s.kind) ? 1.5 : s.kind==='heavy'||s.kind==='buster' ? .3 : .12 });
         dead=true;
       } else if (soldiers.some(o=>Math.abs(o.x-s.x)<1.2 && s.y>o.y-4 && s.y<o.y+1)) { explode(s.x,s.y,s.r,{fire:.1}); dead=true; }
     }
@@ -800,6 +800,7 @@ function updateDirector() {
     let tw = pool.reduce((a,e)=>a+e.w,0), r=rand()*tw, ev=pool[0];
     for (const e of pool) { r-=e.w; if (r<=0) { ev=e; break; } }
     ev.run(); game.events++;
+    if (game.events===4 || (game.events>4 && game.events%6===4)) schedule(6, () => { banner('GIANT METEOR','IT\'S GOING TO LEAVE A HOLE'); schedule(2.5, ()=>spawnShell('giant', pickX())); });
     if (game.events>1) { gold += 15; schedule(9, ()=>toast('Held the line  +15 ◆')); }
     game.nextEvent = game.t + Math.max(11, 30 - game.t/14) + rand()*6;
   }
@@ -861,7 +862,7 @@ function render() {
   for (const f of flashes) addLight(f.x,f.y,f.r,1.8*f.life/f.max,y0,rows);
   for (const f of flares) addLight(f.x,f.y,46,.55,y0,rows);
   for (const m of mgs) if (m.flash) addLight(m.x+2.5,m.y,10,.8,y0,rows);
-  for (const sh2 of shells) if (sh2.kind==='meteor') addLight(sh2.x,sh2.y,16,1.2,y0,rows);
+  for (const sh2 of shells) if (isMet(sh2.kind)) addLight(sh2.x,sh2.y,16,1.2,y0,rows);
   const tk = tick;
   for (let r=0;r<rows;r++) {
     const y=y0+r, rr=r*W;
@@ -924,8 +925,8 @@ function drawEntities(s) {
     for (let k=0;k<4;k++) px(cx+Math.cos(a+k*1.57)*1.6, cy+Math.sin(a+k*1.57)*1.6, 1, 1, '#a9b39a');
     for (let k=0;k<3;k++) px(x+9+k*1.5,y+2,1,1, (tick>>4)%3===k ? '#ffe9a8' : '#7a6a3a');
     px(x+9,y+4,4,1, gn.oc ? ((tick>>2)&1?'#ffb040':'#ff6020') : gn.hp/gn.max<.35 ? ((tick>>3)&1?'#e04a30':'#5a1a10') : '#6f8a4a');
-    if (state==='play') { ctx.textAlign='center'; ctx.font=`bold ${Math.round(Math.max(9*dpr,s*2.2))}px ui-monospace,Menlo,monospace`;
-      const t = gn.oc ? `⚡ ${Math.ceil(gn.oc/60)}s` : gn.cool ? `COOLING ${Math.ceil(gn.cool/60)}s` : 'TAP ⚡ OVERCHARGE';
+    if (state==='play') { ctx.textAlign='center'; ctx.font=`bold ${Math.round(Math.max(14*dpr,s*3))}px ui-monospace,Menlo,monospace`;
+      const t = gn.oc ? `⚡ ${Math.ceil(gn.oc/60)}s` : gn.cool ? `${Math.ceil(gn.cool/60)}s` : 'TAP ⚡';
       ctx.fillStyle='#000a'; ctx.fillText(t,(x+w/2)*s+1,(y-5)*s+1); ctx.fillStyle = gn.oc ? '#ffb040' : gn.cool ? '#8a8a80' : '#f0d68a'; ctx.fillText(t,(x+w/2)*s,(y-5)*s); }
     px(x+w-3,y-4,2,4,'#2a2420');
     if (state!=='over' && tick%9===0) particles.push({x:x+w-2,y:y-4,vx:.02,vy:-.06,life:120,max:120,k:'smoke'});
@@ -936,8 +937,8 @@ function drawEntities(s) {
   for (const d of drills) {
     px(d.x+1,d.y-3,1,3,'#3a3c40'); px(d.x+DRILL_W-2,d.y-3,1,3,'#3a3c40'); px(d.x,d.y-3,DRILL_W,1,'#5a5c60');
     const sp=d.rem ? ((d.spin||0)>>1)&1 : 0; for (let c=0;c<DRILL_W;c+=2) px(d.x+c+sp,d.y+4,1,1,'#c9cdd2');
-    if (state==='play') { ctx.font=`bold ${Math.round(Math.max(9*dpr,s*2.2))}px ui-monospace,Menlo,monospace`;
-      ctx.fillStyle='#000a'; const t = d.rem ? `▼${d.rem}` : `TAP ◆${DRILL_COST}`; ctx.fillText(t,(d.x+DRILL_W/2)*s+1,(d.y-4)*s+1); ctx.fillStyle=d.rem?'#9fd07a':'#f0d68a'; ctx.fillText(t,(d.x+DRILL_W/2)*s,(d.y-4)*s); }
+    if (state==='play') { ctx.font=`bold ${Math.round(Math.max(14*dpr,s*3))}px ui-monospace,Menlo,monospace`;
+      ctx.fillStyle='#000a'; const t = d.rem ? `▼${d.rem}` : `DRILL ◆${DRILL_COST}`; ctx.fillText(t,(d.x+DRILL_W/2)*s+1,(d.y-4)*s+1); ctx.fillStyle=d.rem?'#9fd07a':'#f0d68a'; ctx.fillText(t,(d.x+DRILL_W/2)*s,(d.y-4)*s); }
   }
   for (const p of pumps) { px(p.x+1,p.y,2,3,'#2a3440'); const a=p.spin; px(p.x+1.5+Math.cos(a)*.8,p.y+1+Math.sin(a)*.8,1,1,'#9fb7c8'); }
   for (const m of mgs) {
@@ -951,7 +952,8 @@ function drawEntities(s) {
     px(x+(sd.dir>0?2:-1),y-2+(sd.atk?1:0),1,1,'#888');
   }
   for (const sh2 of shells) {
-    if (sh2.kind==='meteor') { px(sh2.x-1,sh2.y-1,3,3,'#ffd27a'); px(sh2.x,sh2.y,1,1,'#fff'); }
+    if (sh2.kind==='giant') { px(sh2.x-3,sh2.y-3,7,7,'#c0501e'); px(sh2.x-2,sh2.y-2,5,5,'#ffd27a'); px(sh2.x-1,sh2.y-1,2,2,'#fff'); }
+    else if (isMet(sh2.kind)) { px(sh2.x-1,sh2.y-1,3,3,'#ffd27a'); px(sh2.x,sh2.y,1,1,'#fff'); }
     else if (sh2.kind==='buster') { px(sh2.x-.5,sh2.y-3,2,3,'#1e1c1a'); px(sh2.x-.5,sh2.y,2,1,'#c0402a'); }
     else { px(sh2.x,sh2.y-1,1,2,'#2a2622'); }
   }
@@ -965,7 +967,7 @@ function drawEntities(s) {
     else px(p.x,p.y,1,1, p.t===SAND?'#a88a58':'#6a5440');
   }
   for (const f of flares) { px(f.x,f.y,1,1,'#fff6d0'); }
-  ctx.font = `bold ${Math.round(scale*3)}px ui-monospace,Menlo,monospace`; ctx.textAlign='center';
+  ctx.font = `bold ${Math.round(Math.max(14*dpr,scale*3.5))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center';
   for (const p of popups) { ctx.fillStyle=`rgba(240,200,80,${p.life/60})`; ctx.fillText(p.txt, p.x*s, p.y*s); }
   // ghost
   const gh = ghost();
@@ -977,7 +979,7 @@ function drawEntities(s) {
     ctx.save(); ctx.strokeStyle='rgba(230,190,74,.55)'; ctx.lineWidth=Math.max(1,dpr); ctx.setLineDash([s*2,s*2]); ctx.beginPath();
     for (let x=0;x<W;x++) { const y=(surfOrig[x]+GEN_MAX)*s; x ? ctx.lineTo(x*s,y) : ctx.moveTo(0,y); } ctx.stroke(); ctx.restore();
     const c0 = gh.cells[0], r = genRate(c0[0]+GEN_W/2, c0[1]+GEN_H), lx = c0[0]+GEN_W/2, ly = c0[1]-2;
-    ctx.font = `bold ${Math.round(Math.max(11*dpr, s*3))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center';
+    ctx.font = `bold ${Math.round(Math.max(15*dpr, s*3.5))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center';
     ctx.fillStyle='#000a'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s+1, ly*s+1);
     ctx.fillStyle = r>0 ? '#f0d68a' : '#e05a40'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s, ly*s);
   }
@@ -1064,7 +1066,7 @@ function buildTray() {
     const el=document.createElement('div'); el.className='item'; el.dataset.id=it.id;
     const ic=document.createElement('canvas'); ic.width=16; ic.height=12; drawIcon(ic,it.id);
     el.append(ic); const b=document.createElement('b'); b.textContent=it.name; el.append(b);
-    const i=document.createElement('i'); i.textContent = it.kind==='draw' ? '◆½/px' : '◆'+it.cost; el.append(i);
+    const i=document.createElement('i'); i.textContent = it.kind==='draw' ? 'DRAW' : '◆'+it.cost; el.append(i);
     tray.append(el);
   }
 }
@@ -1075,7 +1077,7 @@ function updateHUD() {
   const tot=gens.reduce((a,gn)=>a+Math.max(0,gn.hp),0), mx=gens.reduce((a,gn)=>a+gn.max,0)||1, weak=gens.reduce((a,gn)=>Math.min(a,gn.hp/gn.max),1);
   $('hqFill').style.width=(tot/mx*100)+'%'; $('hqBar').classList.toggle('hurt', weak<.35);
   const rate=gens.reduce((a,gn)=>a+gn.rate*(gn.oc?2:1),0)*60;
-  $('hqText').textContent = `GEN ×${gens.length} · +${Math.round(rate)}◆/MIN`;
+  $('hqText').textContent = `GEN ${gens.length} · ${Math.round(rate)}◆/m`;
   refreshTray();
 }
 
@@ -1191,7 +1193,7 @@ function startGame() {
     [13,'Tap a DRILL to bore 20 deeper for ◆10. Ore is worth more the deeper it is.'],
     [33,'Tap a GENERATOR to overcharge it: double ◆ for 20s, but it sparks fires.'],
     [20,'More GENERATORs = more ◆. Shallow pays best, but that is where shells land.'],
-    [26,'Earth, BAGS and CONCRETE absorb blasts.'],
+    [26,'Earth and CONCRETE absorb blasts.'],
   ];
   for (const [t,msg] of tips) schedule(t, ()=>toast(msg));
 }
