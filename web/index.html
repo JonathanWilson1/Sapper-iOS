@@ -469,12 +469,15 @@ function stepSim() {
         case WATER: {
           const j=i+W, b=g[j];
           if (b===E || b===FIRE) { g[j]=E; swap(i,j); break; }
-          if ((b===SOIL||b===SAND||b===GRASS||b===RUBBLE) && rand()<.0012) { g[i]=E; break; } // seeps away
+          { // seeps into porous ground below and beside it, so floods drain away over time
+            const por = t2 => t2===SOIL||t2===SAND||t2===GRASS||t2===RUBBLE;
+            const n = (por(b)?2:0) + (x>0&&por(g[i-1])?1:0) + (x<W-1&&por(g[i+1])?1:0);
+            if (n && rand() < .0012*n) { g[i]=E; break; } }
           const d = rand()<.5?-1:1;
           if (x+d>=0 && x+d<W && g[j+d]===E) { swap(i,j+d); break; }
           if (x-d>=0 && x-d<W && g[j-d]===E) { swap(i,j-d); break; }
           let moved=false;
-          for (const dd of [d,-d]) { let tx=-1; for (let n=1;n<=4;n++){ const nx=x+dd*n; if (nx<0||nx>=W||g[i+dd*n]!==E) break; tx=i+dd*n; if (g[tx+W]===E) break; } if (tx>=0){ swap(i,tx); moved=true; break; } }
+          for (const dd of [d,-d]) { let tx=-1; for (let n=1;n<=6;n++){ const nx=x+dd*n; if (nx<0||nx>=W||g[i+dd*n]!==E) break; tx=i+dd*n; if (g[tx+W]===E) break; } if (tx>=0){ swap(i,tx); moved=true; break; } }
           break;
         }
         case SOIL: case GRASS: {
@@ -616,16 +619,17 @@ function explode(x, y, r, opt={}) {
 
 // ---------- shells / meteors
 function spawnShell(kind, x) {
-  const K = { light:{r:6,pen:0}, howitzer:{r:9,pen:4}, heavy:{r:13,pen:9}, meteor:{r:20,pen:7} }[kind];
+  const K = { light:{r:6,pen:0}, howitzer:{r:9,pen:4}, heavy:{r:13,pen:9}, meteor:{r:32,pen:22}, buster:{r:22,pen:40} }[kind];
   const s = { kind, x, y:-170-rand()*40, vx:(rand()-.5)*.25, vy:1.1, r:K.r, pen:K.pen + Math.floor(game.intensity-1), whistled:false };
   if (kind==='meteor') { s.vx = (rand()<.5?-1:1)*(.5+rand()*.4); s.x = x - s.vx*150; s.vy=1.4; s.y=-160; }
   shells.push(s);
+  return s;
 }
 function updateShells() {
   for (let k=shells.length-1;k>=0;k--) {
     const s=shells[k];
     s.vy += s.kind==='meteor'?.01:.025;
-    if (!s.whistled && s.y > cam.y-60 && s.kind!=='meteor') { s.whistled=true; sfx.whistle(); }
+    if (!s.whistled && s.y > cam.y-60 && s.kind!=='meteor') { s.whistled=true; sfx.whistle(s.kind==='buster'); }
     if (s.kind==='meteor' && rand()<.9) particles.push({x:s.x,y:s.y,vx:-s.vx*.2+(rand()-.5)*.2,vy:-s.vy*.2,life:30,max:30,k:'spark'});
     const n = Math.ceil(Math.hypot(s.vx,s.vy)*2);
     let dead=false;
@@ -636,8 +640,9 @@ function updateShells() {
       if (cy<0) continue;
       const t=g[cy*W+cx];
       if (SOLID[t]) {
-        if (s.pen>0 && (t===SOIL||t===GRASS||t===SAND||t===RUBBLE)) { s.pen -= 1; s.vy*=.93; continue; }
-        explode(s.x, s.y, s.r, { fire: s.kind==='meteor' ? 1 : s.kind==='heavy' ? .3 : .12 });
+        if (s.pen>0 && !s.breached && (t===SOIL||t===GRASS||t===SAND||t===RUBBLE)) { s.pen -= 1; s.vy*=.93; continue; }
+        if (s.kind==='buster' && s.pen>0 && t!==BED && !(s.breached && t!==CONC)) { if (t===CONC) s.breached=true; s.pen -= Math.max(1, RES[t]); s.vy*=.95; continue; }   // punches through the slab, then goes off on whatever it was protecting
+        explode(s.x, s.y, s.r, { fire: s.kind==='meteor' ? 1.5 : s.kind==='heavy'||s.kind==='buster' ? .3 : .12 });
         dead=true;
       } else if (soldiers.some(o=>Math.abs(o.x-s.x)<1.2 && s.y>o.y-4 && s.y<o.y+1)) { explode(s.x,s.y,s.r,{fire:.1}); dead=true; }
     }
@@ -766,9 +771,16 @@ function applyDig() {
 function schedule(delay, fn){ timers.push({at: game.t + delay, fn}); }
 function banner(title, sub){ const b=document.getElementById('banner'); b.innerHTML = title + (sub?`<small>${sub}</small>`:''); b.style.opacity=1; clearTimeout(banner.t); banner.t=setTimeout(()=>b.style.opacity=0, 2800); }
 function pickX(){ const gn = gens.length ? gens[rand()*gens.length|0] : null; return gn && rand()<.7 ? Math.max(2,Math.min(W-3, gn.x+gn.w/2 + (rand()-.5)*56)) : 2+rand()*(W-4); }
+function maybeBuster() {
+  let best=-1, bestN=0;
+  const cnt=[]; for (let x=0;x<W;x++) { let n=0; for (let y=SKY;y<H;y++) if (g[y*W+x]===CONC) n++; cnt.push(n); if (n>bestN) bestN=n; }
+  const cols=cnt.map((n,x)=>n===bestN?x:-1).filter(x=>x>=0); best = cols[cols.length>>1];   // middle of the thickest slab
+  if (bestN < 8) return;   // only answers really thick concrete
+  schedule(3+rand()*3, () => { banner('BUNKER BUSTER','CONCRETE WON\'T SAVE YOU'); const sh=spawnShell('buster', best+.5); sh.vx=0; sh.pen = 30 + bestN*6; });
+}
 const EVENTS = [
-  { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); const n=8+Math.round(game.intensity*4); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); } },
-  { id:'heavy',   w:2, after:80,  run(){ banner('HEAVY GUNS','DEEP PENETRATING SHELLS'); const n=2+Math.round(game.intensity); for(let k=0;k<n;k++) schedule(2.5+k*1.6+rand(), ()=>spawnShell('heavy', pickX())); } },
+  { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); const n=8+Math.round(game.intensity*4); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); maybeBuster(); } },
+  { id:'heavy',   w:2, after:80,  run(){ banner('HEAVY GUNS','DEEP PENETRATING SHELLS'); const n=2+Math.round(game.intensity); for(let k=0;k<n;k++) schedule(2.5+k*1.6+rand(), ()=>spawnShell('heavy', pickX())); maybeBuster(); } },
   { id:'rain',    w:2, after:45,  run(){ banner('STORM FRONT','FLOODING LIKELY — PUMPS READY'); rainUntil = game.t + 14 + game.intensity*3; sfx.rain(true); } },
   { id:'raid',    w:3, after:55,  run(){ banner('ENEMY RAID','INFANTRY ADVANCING'); const n=2+Math.round(game.intensity*1.6); for(let k=0;k<n;k++) schedule(2+k*1.4, ()=>spawnSoldier(rand()<.5?-1:1)); } },
   { id:'tremor',  w:1, after:110, run(){ banner('TREMOR','SHORE UP YOUR TUNNELS'); schedule(2, tremor); } },
@@ -940,6 +952,7 @@ function drawEntities(s) {
   }
   for (const sh2 of shells) {
     if (sh2.kind==='meteor') { px(sh2.x-1,sh2.y-1,3,3,'#ffd27a'); px(sh2.x,sh2.y,1,1,'#fff'); }
+    else if (sh2.kind==='buster') { px(sh2.x-.5,sh2.y-3,2,3,'#1e1c1a'); px(sh2.x-.5,sh2.y,2,1,'#c0402a'); }
     else { px(sh2.x,sh2.y-1,1,2,'#2a2622'); }
   }
   for (const t of tracers) { ctx.strokeStyle='#ffd36acc'; ctx.lineWidth=Math.max(1,scale*.35); ctx.beginPath(); ctx.moveTo(t.x1*s,t.y1*s); ctx.lineTo(t.x2*s,t.y2*s); ctx.stroke(); }
@@ -1012,7 +1025,7 @@ const sfx = {
     const gn=c.createGain(); const t=c.currentTime; gn.gain.setValueAtTime(vol,t); gn.gain.exponentialRampToValueAtTime(.001,t+dur); s.connect(f); f.connect(gn); gn.connect(this.master); s.start(t, Math.random()); s.stop(t+dur+.05); return f; },
   boom(r, vol) { const c=this.ctx; if (!c) return; const f=this.nz(.4+r*.06,'lowpass',300+r*40, Math.min(1,.25+r*.05)*vol); if (f) f.frequency.exponentialRampToValueAtTime(60,c.currentTime+.5+r*.05);
     const o=c.createOscillator(), gn=c.createGain(), t=c.currentTime; o.frequency.setValueAtTime(70,t); o.frequency.exponentialRampToValueAtTime(28,t+.5); gn.gain.setValueAtTime(.5*vol,t); gn.gain.exponentialRampToValueAtTime(.001,t+.6); o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t+.7); },
-  whistle() { const c=this.ctx; if (!c) return; const o=c.createOscillator(), gn=c.createGain(), t=c.currentTime; o.type='sine'; o.frequency.setValueAtTime(1500+Math.random()*300,t); o.frequency.exponentialRampToValueAtTime(420,t+1.1);
+  whistle(low) { const c=this.ctx; if (!c) return; const o=c.createOscillator(), gn=c.createGain(), t=c.currentTime; o.type='sine'; o.frequency.setValueAtTime(low?700:1500+Math.random()*300,t); o.frequency.exponentialRampToValueAtTime(low?160:420,t+1.1);
     gn.gain.setValueAtTime(.0001,t); gn.gain.linearRampToValueAtTime(.035,t+.3); gn.gain.linearRampToValueAtTime(.0001,t+1.15); o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t+1.2); },
   mg() { if (!this.ctx || this.ctx.currentTime-this.lastMg<.07) return; this.lastMg=this.ctx.currentTime; this.nz(.06,'highpass',900,.18); },
   dig() { this.nz(.05,'bandpass',500+Math.random()*400,.08,2); },
