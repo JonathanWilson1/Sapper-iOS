@@ -314,6 +314,9 @@ function updateDrills() {
       g[i]=DRILL; hp[i]=0; prop[i]=0; g[d.y*W+d.x+c]=E;
       if (rand()<.4) particles.push({x:d.x+c+.5,y:by,vx:(rand()-.5)*.5,vy:-.3-rand()*.3,life:25,max:25,k:'spark',dirt:1});
     }
+    // shore the shaft behind it: posts down both walls, a cross-brace every 8 rows
+    const ty=d.y; prop[ty*W+d.x]=1; prop[ty*W+d.x+DRILL_W-1]=1;
+    if ((d.depth=(d.depth||0)+1)%8===0) for (let c=0;c<DRILL_W;c++) prop[ty*W+d.x+c]=1;
     d.y++; d.rem--;
     if (d.rem%4===0) sfx.dig();
     queueRockCheck(d.x+DRILL_W/2,by,5);
