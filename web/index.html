@@ -24,7 +24,7 @@
   .gold{color:#e6bf4a}
   #hqBar{flex:1;height:22px;background:var(--panel);border:2px solid var(--edge);position:relative;min-width:60px}
   #hqFill{position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(#6f8a4a,#3f5228);transition:width .2s}
-  #hqBar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:2px;text-shadow:1px 1px 0 #000}
+  #hqBar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-shadow:1px 1px 0 #000}
   #hqBar.hurt #hqFill{background:linear-gradient(#c0503a,#7a2418)}
   #banner{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 48px);text-align:center;font-weight:900;font-size:18px;letter-spacing:3px;
     color:#f0d68a;text-shadow:2px 2px 0 #000,0 0 12px #b33a2a;opacity:0;transition:opacity .3s;pointer-events:none;z-index:4}
@@ -37,7 +37,7 @@
   #tray::-webkit-scrollbar{display:none}
   .item{flex:1 1 0;min-width:0;height:58px;background:#211912;border:2px solid var(--edge);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative}
   .item canvas{width:28px;height:21px;image-rendering:pixelated;pointer-events:none}
-  .item b{font-size:7.5px;letter-spacing:0;white-space:nowrap;pointer-events:none}
+  .item b{font-size:7px;letter-spacing:0;white-space:nowrap;pointer-events:none}
   .item i{font-style:normal;font-size:9.5px;color:#e6bf4a;pointer-events:none}
   .item.sel{border-color:var(--brass);background:#2e2416;box-shadow:inset 0 0 0 1px #000}
   .item.poor i{color:#8a5a4a}
@@ -69,7 +69,7 @@
   <button id="pauseBtn" aria-label="Pause">II</button>
   <div class="stat" id="timeStat">00:00</div>
   <div class="stat gold" id="goldStat">◆ 0</div>
-  <div id="hqBar"><div id="hqFill"></div><span id="hqText">COMMAND POST</span></div>
+  <div id="hqBar"><div id="hqFill"></div><span id="hqText">GENERATORS</span></div>
 </div>
 <div id="banner"></div>
 <div id="toast"></div>
@@ -92,12 +92,13 @@
     <p><em>Two fingers</em> scroll and pinch to zoom.</p>
     <p><em>One finger digs</em>: drag through earth beside any tunnel. Rock is slow. Gold ore pays ◆.</p>
     <p>Wide caverns cave in. Undercut a rock and it drops in one piece.</p>
-    <p><em>DEPOT</em> earns ◆ over time. Shallow depots pay most but sit under the shells; none work below the dashed line.</p>
+    <p><em>GENERATORs</em> earn ◆. Shallow ones pay most but sit under the shells; none work below the dashed line.</p>
+    <p><em>DRILL</em>: tap it to bore 20 cells straight down for ◆10, mining any ore it passes.</p>
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>BAGS</em> and <em>CONCRETE</em> soak up shellfire.</p>
     <p><em>PUMP</em> drains floods. <em>LAMP</em> lights the dark. <em>MG NEST</em> cuts down raiders.</p>
     <p>Drag items up out of the tray to place them. <em>Pinch</em> to zoom.</p>
-    <p>Keep the <em>COMMAND POST</em> standing. Survive as long as you can.</p>
+    <p>Lose every <em>GENERATOR</em> and the line falls. Survive as long as you can.</p>
   </div>
   <button id="helpBack" class="primary">Understood</button>
 </div>
@@ -125,7 +126,7 @@ const W = 192, H = 440;
 const OX = (W-128)/2;              // base layout offset (layout was designed at 128 wide)
 const VIEWW = 112, ZMIN = VIEWW/W;  // cells visible across the screen at zoom 1
 const E=0,SOIL=1,SAND=2,ROCK=3,WATER=4,TIMBER=5,BAGS=6,CONC=7,GOLD=8,RUBBLE=9,FIRE=10,HQ=11,PUMP=12,MG=13,BED=14,GRASS=15,LAMP=16;
-const DEPOT=17;
+const DRILL=17;
 const NT = 18;
 const SOLID = new Uint8Array(NT).fill(1); SOLID[E]=0; SOLID[WATER]=0; SOLID[FIRE]=0;
 //            E  SOIL SAND ROCK WATR TIMB BAGS CONC GOLD RUBB FIRE HQ  PUMP MG   BED GRAS LAMP
@@ -148,7 +149,7 @@ const surfOrig = new Int16Array(W);
 const SKY = 44;
 
 let tick = 0, stampV = 1;
-let hq = null, pumps = [], mgs = [], depots = [], soldiers = [], shells = [], particles = [], flashes = [], tracers = [], popups = [], flares = [], timers = [];
+let gens = [], drills = [], pumps = [], mgs = [], soldiers = [], shells = [], particles = [], flashes = [], tracers = [], popups = [], flares = [], timers = [];
 let shake = 0, gold = 0, rainUntil = 0, demo = true;
 const game = { t: 0, best: +(localStorage.getItem('sapper.best')||0), mined: 0, kills: 0, nextEvent: 22, harassAt: 40, intensity: 1, events: 0 };
 let state = 'menu';
@@ -172,7 +173,7 @@ function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul
 const PAL = { // base rgb, variance
   [SOIL]:[74,52,36,14],[SAND]:[170,140,86,16],[ROCK]:[86,86,92,14],[WATER]:[36,84,132,12],[TIMBER]:[116,80,44,16],
   [BAGS]:[132,116,78,12],[CONC]:[120,116,106,10],[GOLD]:[214,168,44,26],[RUBBLE]:[96,76,58,16],[HQ]:[64,72,58,8],
-  [PUMP]:[68,80,92,8],[MG]:[58,62,54,8],[BED]:[24,22,26,6],[GRASS]:[72,80,38,12],[LAMP]:[255,224,150,0],[DEPOT]:[104,88,54,10],[FIRE]:[255,140,40,0]
+  [PUMP]:[68,80,92,8],[MG]:[58,62,54,8],[BED]:[24,22,26,6],[GRASS]:[72,80,38,12],[LAMP]:[255,224,150,0],[DRILL]:[78,80,86,8],[FIRE]:[255,140,40,0]
 };
 const palR=new Uint8Array(NT*8), palG=new Uint8Array(NT*8), palB=new Uint8Array(NT*8);
 for (const k in PAL) { const [r,gg,b,v]=PAL[k]; for(let s=0;s<8;s++){ const o=(s-3.5)/3.5*v; palR[k*8+s]=Math.max(0,Math.min(255,r+o)); palG[k*8+s]=Math.max(0,Math.min(255,gg+o*.9)); palB[k*8+s]=Math.max(0,Math.min(255,b+o*.8)); } }
@@ -226,35 +227,97 @@ function setCell(x,y,t){ if(!inB(x,y)) return; const i=idx(x,y); g[i]=t; hp[i]=0
 function fillRect(x0,y0,w,h,t){ for(let y=y0;y<y0+h;y++) for(let x=x0;x<x0+w;x++) setCell(x,y,t); }
 
 function buildBase(isDemo) {
-  const O = OX, fy = surfOrig[64+O] + 58;
+  const O = OX, gx = 58+O, fy = surfOrig[gx+7] + 26;
   // clear hazards around the base zone
-  for (let y=SKY;y<fy+14;y++) for (let x=26+O;x<104+O;x++){ const i=idx(x,y); if (y>=surfOrig[x]) { if (g[i]===WATER||g[i]===SAND) g[i]=SOIL; if (g[i]===ROCK && y<fy+4 && x<96+O) g[i]=SOIL; bgc[i]=1; } }
+  for (let y=SKY;y<fy+8;y++) for (let x=26+O;x<104+O;x++){ const i=idx(x,y); if (y>=surfOrig[x]) { if (g[i]===WATER||g[i]===SAND) g[i]=SOIL; if (g[i]===ROCK && y<fy+3 && x<92+O) g[i]=SOIL; bgc[i]=1; } }
   // surface trench + parapet
   for (let x=26+O;x<56+O;x++){ const s0=surfOrig[x]; for(let y=s0;y<s0+5;y++) setCell(x,y,E); }
   const bag = (x,w) => { const s0=Math.min(...Array.from({length:w},(_,k)=>surfOrig[x+k])); fillRect(x,s0-2,w,2,BAGS); };
   bag(21+O,6); bag(55+O,6);
-  // shaft, with timber collars on its walls
+  // shaft down from the trench
   const s34 = surfOrig[34+O];
   fillRect(34+O,s34+4,7,fy-s34-4,E);
-  for (let y=s34+8; y<fy-14; y+=8) { setCell(33+O,y,TIMBER); setCell(41+O,y,TIMBER); }
-  // command chamber: timber bracing, concrete floor
-  fillRect(34+O,fy-13,58,13,E);
-  fillRect(32+O,fy,62,2,CONC);
-  hq = { x:58+O, y:fy-7, w:14, h:7, hp:100, max:100, level:1 };
-  fillRect(hq.x,hq.y,hq.w,hq.h,HQ);
+  for (let y=s34+8; y<fy-12; y+=8) { setCell(33+O,y,TIMBER); setCell(41+O,y,TIMBER); }
+  // generator chamber: timber bracing, concrete pad under the generator
+  fillRect(34+O,fy-11,56,11,E);
+  fillRect(gx-2,fy,GEN_W+4,2,CONC);
+  fillRect(gx,fy-GEN_H,GEN_W,GEN_H,HQ); addGen(gx,fy-GEN_H);
   const frame = (L,R,top,bot,posts) => { const mark=(x,y)=>{ if (inB(x,y)) prop[idx(x,y)]=1; }; for (let x=L;x<=R;x++){ mark(x,top); mark(x,top+1); } for (const p of posts) for (let y=top+2;y<=bot;y++) mark(p,y); };
-  frame(41+O,91+O,fy-13,fy-1,[41+O,52+O,77+O,91+O]);
-  place('lamp', 47+O, fy-11, true); place('lamp', 84+O, fy-11, true); place('lamp', 34+O, s34+16, true);
+  frame(41+O,89+O,fy-11,fy-1,[41+O,52+O,77+O,89+O]);
+  place('lamp', 47+O, fy-9, true); place('lamp', 84+O, fy-9, true); place('lamp', 34+O, s34+12, true);
+  place('drill', 83+O, fy-2, true);
   // a gold vein to teach mining, just off the chamber
-  for (let y=fy-10;y<fy;y++) for (let x=92+O;x<104+O;x++) if (hash2(x,y,seed+5)<.55) setCell(x,y, hash2(x,y,seed+6)<.45?GOLD:ROCK);
+  for (let y=fy-8;y<fy;y++) for (let x=90+O;x<102+O;x++) if (hash2(x,y,seed+5)<.55) setCell(x,y, hash2(x,y,seed+6)<.45?GOLD:ROCK);
   if (isDemo) {
     place('mg', 47+O, surfOrig[47+O]+4, true);
     place('pump', 46+O, fy-2, true);
-    fillRect(92+O,fy-12,22,12,E); frame(92+O,113+O,fy-12,fy-1,[100+O,113+O]); place('lamp',107+O,fy-10,true);
-    fillRect(80+O,fy+2,7,38,E); fillRect(50+O,fy+38,40,9,E); frame(50+O,89+O,fy+38,fy+46,[50+O,64+O,79+O,89+O]); place('lamp',70+O,fy+40,true);
-    fillRect(110+O,fy-30,24,9,E); frame(110+O,133+O,fy-30,fy-22,[110+O,133+O]); place('depot',121+O,fy-23,true);
+    drills[drills.length-1].rem = 90;
+    const g2x = 120+O, f2 = surfOrig[g2x+7] + 16;
+    fillRect(g2x-4,f2-10,GEN_W+8,10,E); frame(g2x-4,g2x+GEN_W+3,f2-10,f2-1,[g2x-4,g2x+GEN_W+3]);
+    fillRect(g2x,f2-GEN_H,GEN_W,GEN_H,HQ); addGen(g2x,f2-GEN_H); place('lamp',g2x+GEN_W+1,f2-8,true);
   }
   computeSupport();
+}
+
+// ---------- generators: the thing you protect. Each earns ◆; shallow ones earn more but take the shelling.
+const GEN_W = 14, GEN_H = 7, GEN_MAX = 110;
+function genRate(x,y){ const d=Math.max(0, y - surfOrig[Math.max(0,Math.min(W-1,x|0))]); return d>GEN_MAX ? 0 : 2*(1-d/140); }
+function genAt(x,y){ for (const gn of gens) if (x>=gn.x && x<gn.x+gn.w && y>=gn.y && y<gn.y+gn.h) return gn; return null; }
+function addGen(x,y){ const gn={ x, y, w:GEN_W, h:GEN_H, hp:100, max:100, acc:0, n:0, hit:0, rate:genRate(x+GEN_W/2, y+GEN_H) }; gens.push(gn); return gn; }
+function hurtGen(gn, dmg){ if (!gn) return; gn.hp -= dmg; gn.hit = 10; }
+function nearestGen(x,y){ let best=null, bd=1e9; for (const gn of gens){ const d=Math.abs(gn.x+gn.w/2-x)+Math.abs(gn.y+gn.h/2-y)*.5; if (d<bd){bd=d;best=gn;} } return best; }
+function updateGens() {
+  for (let k=gens.length-1;k>=0;k--) {
+    const gn=gens[k];
+    if (state==='menu') { gn.hp=gn.max; continue; }
+    if (gn.hp<=0) { destroyGen(gn); continue; }
+    if (state!=='play') continue;
+    gn.acc += gn.rate/60;
+    if (gn.acc>=1) { gn.acc-=1; gold+=1; if (++gn.n%5===0) popup(gn.x+gn.w/2, gn.y-1, '+◆'); }
+    if (tick%30===0) {
+      let wet=0; for (let y=gn.y-1;y<=gn.y+gn.h;y++) for (let x=gn.x-1;x<=gn.x+gn.w;x++) if (inB(x,y) && g[y*W+x]===WATER) wet++;
+      if (wet>3) { hurtGen(gn, wet*.06); if (!updateGens.wt || game.t-updateGens.wt>8) { updateGens.wt=game.t; toast('A generator is flooding! Drop a PUMP nearby'); } }
+    }
+  }
+}
+function destroyGen(gn) {
+  gens.splice(gens.indexOf(gn),1);
+  for (let y=gn.y;y<gn.y+gn.h;y++) for (let x=gn.x;x<gn.x+gn.w;x++) if (g[y*W+x]===HQ) { g[y*W+x]=rand()<.6?RUBBLE:FIRE; hp[y*W+x]=120; }
+  explode(gn.x+gn.w/2, gn.y+3, 12, {fire:1});
+  haptic('error');
+  if (state==='play') { if (gens.length) toast(`Generator lost! ${gens.length} left — build another`); else gameOver(); }
+}
+
+// ---------- drills: tap to bore a 3-wide shaft straight down
+const DRILL_STEP = 20, DRILL_COST = 10;
+function drillAt(w){ return drills.find(d => w.x>=d.x-1.5 && w.x<d.x+4.5 && w.y>=d.y-4 && w.y<d.y+5.5); }
+function pressDrill(d) {
+  if (gold < DRILL_COST) { toast('Not enough gold to run the drill'); sfx.deny(); return; }
+  gold -= DRILL_COST; d.rem += DRILL_STEP; sfx.thunk(); haptic('light');
+}
+function updateDrills() {
+  for (let k=drills.length-1;k>=0;k--) {
+    const d=drills[k];
+    if (g[idx(d.x,d.y)]!==DRILL) { drills.splice(k,1); continue; }
+    if (!d.rem) continue;
+    const by=d.y+4;
+    if (by>=H) { d.rem=0; continue; }
+    let hard=false, block=false;
+    for (let c=0;c<3;c++) { const t=g[by*W+d.x+c]; if (t===BED||t===HQ||t===CONC||t===DRILL||t===MG||t===PUMP) block=true; if (t===ROCK||t===GOLD) hard=true; }
+    if (block) { d.rem=0; toast('Drill hit something it can\'t bore through'); continue; }
+    d.spin=(d.spin||0)+1;
+    if (++d.work < (hard?10:3)) continue;
+    d.work=0;
+    for (let c=0;c<3;c++) {
+      const i=by*W+d.x+c;
+      if (g[i]===GOLD) { gold+=2; game.mined+=2; popup(d.x+c,by,'+◆'); sfx.coin(); }
+      g[i]=DRILL; hp[i]=0; prop[i]=0; g[d.y*W+d.x+c]=E;
+      if (rand()<.4) particles.push({x:d.x+c+.5,y:by,vx:(rand()-.5)*.5,vy:-.3-rand()*.3,life:25,max:25,k:'spark',dirt:1});
+    }
+    d.y++; d.rem--;
+    if (d.rem%4===0) sfx.dig();
+    queueRockCheck(d.x+1,by,4);
+  }
 }
 
 // ---------- structures / stamps
@@ -265,9 +328,9 @@ const ITEMS = [
   { id:'lamp',     name:'LAMP',    cost:4,   kind:'stamp' },
   { id:'pump',     name:'PUMP',    cost:40,  kind:'stamp' },
   { id:'mg',       name:'MG', cost:60,  kind:'stamp' },
-  { id:'depot',    name:'DEPOT',   cost:50,  kind:'stamp' },
+  { id:'drill',    name:'DRILL',   cost:30,  kind:'stamp' },
+  { id:'gen',      name:'GENERATOR',cost:150, kind:'stamp' },
   { id:'repair',   name:'REPAIR',  cost:40,  kind:'action' },
-  { id:'fortify',  name:'FORTIFY', cost:120, kind:'action' },
 ];
 const ITEM = Object.fromEntries(ITEMS.map(i=>[i.id,i]));
 const free = (x,y) => inB(x,y) && !SOLID[g[idx(x,y)]];
@@ -304,7 +367,8 @@ function stampFor(id, cx, cy) {
     case 'lamp': cells = [[cx,cy,LAMP]]; needAll=true; break;
     case 'pump': cells = dropRect(cx,cy,4,3,PUMP); needAll=true; break;
     case 'mg': cells = dropRect(cx,cy,5,2,MG); needAll=true; break;
-    case 'depot': cells = dropRect(cx,cy,5,3,DEPOT); needAll=true; break;
+    case 'drill': cells = dropRect(cx,cy,3,4,DRILL); needAll=true; break;
+    case 'gen': cells = dropRect(cx,cy,GEN_W,GEN_H,HQ); needAll=true; break;
     default: return { cells:[], ok:false };
   }
   const set = new Set(cells.map(c=>c[1]*W+c[0]));
@@ -316,11 +380,9 @@ function stampFor(id, cx, cy) {
     for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) { const nx=c[0]+dx, ny=c[1]+dy; if (inB(nx,ny) && !set.has(ny*W+nx) && (SOLID[g[idx(nx,ny)]] || prop[idx(nx,ny)])) anchored=true; }
   }
   const ok = anchored && (needAll ? placeable===cells.length : placeable >= cells.length*.5);
-  if (id==='depot' && depotRate(cells[0][0]+2,cells[0][1]+2)<=0) return { cells, ok:false, tooDeep:true };
+  if (id==='gen' && genRate(cells[0][0]+GEN_W/2,cells[0][1]+GEN_H)<=0) return { cells, ok:false, tooDeep:true };
   return { cells, ok };
 }
-const DEPOT_MAX = 110;
-function depotRate(x,y){ const d=Math.max(0, y - surfOrig[Math.max(0,Math.min(W-1,x))]); return d>DEPOT_MAX ? 0 : 1.2*(1-d/140); }  // ◆ per second: supply thins out the deeper it has to go
 function place(id, cx, cy, freeOfCharge) {
   const it = ITEM[id];
   if (!freeOfCharge && gold < it.cost) { toast('Not enough gold — dig for ore ◆'); sfx.deny(); return false; }
@@ -329,20 +391,18 @@ function place(id, cx, cy, freeOfCharge) {
   for (const c of s.cells) if (c.ok) { if (c[2]===PROPBG) prop[idx(c[0],c[1])]=1; else setCell(c[0],c[1],c[2]); }
   if (id==='pump') { const c=s.cells[0]; pumps.push({ x:c[0], y:c[1], spin:0 }); }
   if (id==='mg')   { const c=s.cells[0]; mgs.push({ x:c[0], y:c[1], cool:0, ang:-Math.PI/2, flash:0 }); }
-  if (id==='depot'){ const c=s.cells[0]; depots.push({ x:c[0], y:c[1], acc:0, n:0, rate:depotRate(c[0]+2,c[1]+2) }); }
-  if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); if (id==='depot') { it.cost += 25; buildTray(); } }
+  if (id==='gen')  { const c=s.cells[0]; addGen(c[0],c[1]); }
+  if (id==='drill'){ const c=s.cells[0]; drills.push({ x:c[0], y:c[1], rem:0, work:0 }); }
+  if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); if (id==='gen') { it.cost += 100; buildTray(); toast(`Generator online: +${Math.round(gens[gens.length-1].rate*60)} ◆/min`); } }
   return true;
 }
 function doAction(id) {
   const it = ITEM[id];
   if (gold < it.cost) { toast('Not enough gold'); sfx.deny(); return; }
   if (id==='repair') {
-    if (hq.hp >= hq.max) { toast('Command post is at full strength'); return; }
-    hq.hp = Math.min(hq.max, hq.hp+35); gold -= it.cost; toast('Command post patched up +35'); sfx.thunk();
-  } else if (id==='fortify') {
-    if (hq.level >= 4) { toast('Command post fully fortified'); return; }
-    gold -= it.cost; hq.level++; hq.max += 40; hq.hp += 40; it.cost = Math.round(it.cost*1.6); buildTray();
-    toast(`Fortified to level ${hq.level}: +40 strength, more supply`); sfx.thunk();
+    const gn = gens.reduce((a,b)=> (b.hp/b.max < a.hp/a.max ? b : a), gens[0]);
+    if (!gn || gn.hp >= gn.max) { toast('Generators are at full strength'); return; }
+    gn.hp = Math.min(gn.max, gn.hp+40); gold -= it.cost; toast('Most damaged generator patched +40'); sfx.thunk();
   }
   haptic('medium');
 }
@@ -476,7 +536,7 @@ function updateBodies() {
       bodies.splice(k,1);
       const n=b.cells.length, c0=b.cells[0], x=c0%W, y=(c0/W)|0;
       if (b.vy>.5) {
-        for (const c of b.cells) { const j=c+W; if (j<W*H && !b.set.has(j)) { if (g[j]===HQ && hq) { hq.hp-=n*.04; hq.hit=10; } else if (g[j]===TIMBER||g[j]===LAMP||g[j]===PUMP||g[j]===MG||g[j]===DEPOT) g[j]=RUBBLE; } }
+        for (const c of b.cells) { const j=c+W; if (j<W*H && !b.set.has(j)) { if (g[j]===HQ) hurtGen(genAt(j%W,(j/W)|0), n*.04); else if (g[j]===TIMBER||g[j]===LAMP||g[j]===PUMP||g[j]===MG||g[j]===DRILL) g[j]=RUBBLE; } }
         const near = 1 - Math.min(1, Math.abs(y - (cam.y + viewRows()/2)) / viewRows());
         shake=Math.min(12, shake+Math.sqrt(n)*.5*Math.max(.2,near)); sfx.boom(Math.min(10,2+Math.sqrt(n)*.6), Math.max(.15,near)*.7);
         if (near>.4) haptic(n>80?'heavy':'medium');
@@ -490,7 +550,7 @@ function updateBodies() {
 // ---------- explosions & damage
 function explode(x, y, r, opt={}) {
   const xi=Math.floor(x), yi=Math.floor(y), R=Math.ceil(r)+2;
-  let hqMax=0;
+  const genHit=new Map();
   for (let dy=-R;dy<=R;dy++) for (let dx=-R;dx<=R;dx++) {
     const d=Math.hypot(dx,dy); if (d>R) continue;
     const cx=xi+dx, cy=yi+dy; if (!inB(cx,cy)) continue;
@@ -499,7 +559,7 @@ function explode(x, y, r, opt={}) {
     for (let s=1;s<d;s++){ const px=Math.round(xi+dx*s/d), py=Math.round(yi+dy*s/d); if (inB(px,py)) acc+=RES[g[py*W+px]]; if (acc>r) break; }
     const e = r - d - acc;
     if (e>1 && prop[i]) { prop[i]=0; if (t===E && rand()<.15) { g[i]=FIRE; hp[i]=80; continue; } }
-    if (t===HQ) { if (e>hqMax) hqMax=e; continue; }
+    if (t===HQ) { const gn=genAt(cx,cy); if (gn && e>(genHit.get(gn)||0)) genHit.set(gn,e); continue; }
     if (e<=0) { if (e>-2.5 && (t===SOIL||t===GRASS) && rand()<.5) g[i]=RUBBLE; continue; }
     if (t===E) { if (opt.fire && rand()<opt.fire*.06) { g[i]=FIRE; hp[i]=30+rand()*60|0; } continue; }
     if (e > HARD[t]) {
@@ -513,7 +573,7 @@ function explode(x, y, r, opt={}) {
     }
   }
   queueRockCheck(x,y,R+3);
-  if (hqMax>0 && hq) { hq.hp -= hqMax*1.7; hq.hit=12; haptic('heavy'); }
+  for (const [gn,e] of genHit) { hurtGen(gn, e*1.7); haptic('heavy'); }
   for (const s of soldiers) if (Math.hypot(s.x-x, s.y-2-y) < r*1.25) s.hp = 0;
   flashes.push({x,y,r:r*3.2,life:14,max:14});
   for (let k=0;k<r*1.5;k++) particles.push({x:x+(rand()-.5)*r,y:y+(rand()-.5)*r*.6,vx:(rand()-.5)*.15,vy:-.05-rand()*.12,life:120+rand()*120,max:240,k:'smoke'});
@@ -567,14 +627,13 @@ function nearHQ(cx,cy){ for (let y=cy-4;y<=cy+1;y++) for (let x=cx-2;x<=cx+2;x++
 function workOn(s, x, y) {
   if (!inB(x,y)) return;
   const i=y*W+x, t=g[i];
-  if (t===HQ) { hq.hp -= .012; s.atk=6; return; }
-  const need = { [SOIL]:14,[GRASS]:14,[SAND]:8,[RUBBLE]:8,[ROCK]:110,[GOLD]:100,[TIMBER]:50,[BAGS]:70,[CONC]:260,[PUMP]:90,[MG]:90,[LAMP]:20,[DEPOT]:90 }[t];
+  if (t===HQ) { hurtGen(genAt(x,y), .012); s.atk=6; return; }
+  const need = { [SOIL]:14,[GRASS]:14,[SAND]:8,[RUBBLE]:8,[ROCK]:110,[GOLD]:100,[TIMBER]:50,[BAGS]:70,[CONC]:260,[PUMP]:90,[MG]:90,[LAMP]:20,[DRILL]:90 }[t];
   if (!need) return;
   s.work++; s.atk=4;
   if (s.work>=need) { g[i]=E; hp[i]=0; s.work=0; }
 }
 function updateSoldiers() {
-  const tx = hq.x + hq.w/2;
   for (let k=soldiers.length-1;k>=0;k--) {
     const s=soldiers[k]; s.anim+=.15; if (s.atk>0) s.atk--;
     let cx=Math.floor(s.x), cy=s.y;
@@ -589,7 +648,8 @@ function updateSoldiers() {
       continue;
     }
     s.vy=0; s.fy=0;
-    if (nearHQ(cx,cy)) { workOn(s, cx, cy); hq.hp -= .012; s.atk=6; continue; }
+    if (nearHQ(cx,cy)) { for (let y=cy-4;y<=cy+1;y++) for (let x=cx-2;x<=cx+2;x++) if (inB(x,y) && g[y*W+x]===HQ) { hurtGen(genAt(x,y), .012/5); } s.atk=6; continue; }
+    const tg = nearestGen(s.x, s.y); if (!tg) continue; const tx = tg.x + tg.w/2;
     let dir = Math.abs(tx-s.x)<1.5 ? 0 : Math.sign(tx-s.x);
     if (dir===0) { workOn(s, cx, cy+1); continue; }        // sap straight down toward the post
     s.dir = dir;
@@ -603,12 +663,6 @@ function updateSoldiers() {
 
 // ---------- pumps & machine guns
 function updateMachines() {
-  for (let k=depots.length-1;k>=0;k--) {
-    const d=depots[k]; if (g[idx(d.x,d.y)]!==DEPOT) { depots.splice(k,1); continue; }
-    if (state!=='play') continue;
-    d.acc += d.rate/60;
-    if (d.acc>=1) { d.acc-=1; gold+=1; if (++d.n%4===0) popup(d.x+2.5,d.y-1,'+◆'); }
-  }
   for (let k=pumps.length-1;k>=0;k--) {
     const p=pumps[k]; if (g[idx(p.x,p.y)]!==PUMP) { pumps.splice(k,1); continue; }
     if (tick%3) continue;
@@ -681,7 +735,7 @@ function applyDig() {
 // ---------- director: events over time
 function schedule(delay, fn){ timers.push({at: game.t + delay, fn}); }
 function banner(title, sub){ const b=document.getElementById('banner'); b.innerHTML = title + (sub?`<small>${sub}</small>`:''); b.style.opacity=1; clearTimeout(banner.t); banner.t=setTimeout(()=>b.style.opacity=0, 2800); }
-function pickX(){ return rand()<.7 ? Math.max(2,Math.min(W-3, hq.x+hq.w/2 + (rand()-.5)*56)) : 2+rand()*(W-4); }
+function pickX(){ const gn = gens.length ? gens[rand()*gens.length|0] : null; return gn && rand()<.7 ? Math.max(2,Math.min(W-3, gn.x+gn.w/2 + (rand()-.5)*56)) : 2+rand()*(W-4); }
 const EVENTS = [
   { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); const n=6+Math.round(game.intensity*3); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); } },
   { id:'heavy',   w:2, after:80,  run(){ banner('HEAVY GUNS','DEEP PENETRATING SHELLS'); const n=2+Math.round(game.intensity); for(let k=0;k<n;k++) schedule(2.5+k*1.6+rand(), ()=>spawnShell('heavy', pickX())); } },
@@ -708,11 +762,6 @@ function updateDirector() {
     game.nextEvent = game.t + Math.max(11, 30 - game.t/14) + rand()*6;
   }
   if (game.t < rainUntil) rainTick(2+game.intensity); else if (sfx.raining) sfx.rain(false);
-  if (tick % (150 - hq.level*20) === 0) gold += 1;
-  if (tick % 30 === 0) { // flood damage
-    let wet=0; for (let y=hq.y-1;y<=hq.y+hq.h;y++) for (let x=hq.x-1;x<=hq.x+hq.w;x++) if (inB(x,y) && g[y*W+x]===WATER) wet++;
-    if (wet>3) { hq.hp -= wet*.06; hq.hit=6; if (!updateDirector.wt || game.t-updateDirector.wt>8) { updateDirector.wt=game.t; toast('Command post is flooding! Drop a PUMP nearby'); } }
-  }
   if (rand()<.002) flares.push({x:10+rand()*(W-20), y:4+rand()*10, vx:(rand()-.5)*.03, life:900});
 }
 function rainTick(rate) {
@@ -727,7 +776,6 @@ function updateDemo() {
   if (game.t < rainUntil) rainTick(3);
   if (tick % 2400 === 2000) spawnShell('meteor', pickX());
   if (rand()<.004) flares.push({x:10+rand()*(W-20), y:4+rand()*10, vx:(rand()-.5)*.03, life:900});
-  hq.hp = hq.max;
   for (let k=timers.length-1;k>=0;k--) if (game.t>=timers[k].at) { const f=timers[k].fn; timers.splice(k,1); f(); }
 }
 
@@ -767,7 +815,7 @@ function render() {
   for (let y=Math.max(0,y0-14); y<Math.min(H,y0+rows+14); y++) for (let x=0;x<W;x++) { const t=g[y*W+x];
     if (t===LAMP) addLight(x+.5,y+.5,17,1.1,y0,rows);
     else if (t===FIRE && fires<160 && ((x+y)&1)===0) { fires++; addLight(x+.5,y+.5,6,.35+rand()*.15,y0,rows); } }
-  if (hq) addLight(hq.x+hq.w/2, hq.y+3, 20, .9, y0, rows);
+  for (const gn of gens) addLight(gn.x+gn.w/2, gn.y+3, 20, .9, y0, rows);
   for (const f of flashes) addLight(f.x,f.y,f.r,1.8*f.life/f.max,y0,rows);
   for (const f of flares) addLight(f.x,f.y,46,.55,y0,rows);
   for (const m of mgs) if (m.flash) addLight(m.x+2.5,m.y,10,.8,y0,rows);
@@ -801,10 +849,10 @@ function render() {
           if (t===GOLD) { lit=Math.max(lit,.55); if (((sh[i]*7+(tk>>2))%97)===0) { R=G=255; B=220; } }
           else if (t===BAGS) { if (((x+((y&1)<<1))&3)===0) { R-=28;G-=26;B-=20; } }
           else if (t===TIMBER) { if (((x*3+y)%7)===0) { R-=22;G-=18;B-=12; } }
-          else if (t===DEPOT) { if (x%5===0 || y%3===0) { R-=30;G-=26;B-=18; } else if ((x+y*2)%7===0) { R+=40;G+=30; } }
+          else if (t===DRILL) { if (((x+y)&3)===0) { R=170;G=140;B=40; } }
           else if (t===CONC) { if (((x+y*5)%11)===0) { R-=16;G-=16;B-=16; } }
           else if (t===GRASS && y>0 && g[i-W]===E && (v&1)) { R+=18; G+=22; }
-          else if (t===HQ && hq && hq.hit>0) { R+=60; }
+          else if (t===HQ) { const gn=genAt(x,y); if (gn && gn.hit>0) R+=60; }
           if (y>0 && !SOLID[g[i-W]] && t!==GRASS) { R+=10; G+=8; B+=6; } // top edge highlight
         }
       }
@@ -826,13 +874,25 @@ function render() {
 }
 function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.floor(x*scale),Math.floor(y*scale),Math.ceil(w*scale),Math.ceil(h*scale)); }
 function drawEntities(s) {
-  // HQ details
-  if (hq) {
-    const {x,y,w,h} = hq;
+  // generators: housing, flywheel, gauge lamps, exhaust stack
+  for (const gn of gens) {
+    const {x,y,w,h} = gn;
     px(x,y,w,1,'#2b3328'); px(x+1,y+h-4,2,4,'#1a1410');
-    for (let k=0;k<3;k++) px(x+4+k*3,y+2,2,1, (tick>>4)%7===k ? '#ffe9a8' : '#e0b45a');
-    px(x+w-3,y-4,1,4,'#2a2420'); px(x+w-2,y-4,2,2,(tick>>3)&1?'#8a2a20':'#a83a2a');
-    if (hq.hit>0) hq.hit--;
+    const a=tick*.15, cx=x+5, cy=y+3.5; px(cx-2,cy-2,5,5,'#232822');
+    for (let k=0;k<4;k++) px(cx+Math.cos(a+k*1.57)*1.6, cy+Math.sin(a+k*1.57)*1.6, 1, 1, '#a9b39a');
+    for (let k=0;k<3;k++) px(x+9+k*1.5,y+2,1,1, (tick>>4)%3===k ? '#ffe9a8' : '#7a6a3a');
+    px(x+9,y+4,4,1, gn.hp/gn.max<.35 ? ((tick>>3)&1?'#e04a30':'#5a1a10') : '#6f8a4a');
+    px(x+w-3,y-4,2,4,'#2a2420');
+    if (state!=='over' && tick%9===0) particles.push({x:x+w-2,y:y-4,vx:.02,vy:-.06,life:120,max:120,k:'smoke'});
+    if (gn.hit>0) gn.hit--;
+  }
+  // drills: rig, spinning bit, status
+  ctx.textAlign='center';
+  for (const d of drills) {
+    px(d.x+1,d.y-3,1,3,'#3a3c40'); px(d.x,d.y-3,3,1,'#5a5c60');
+    const sp=d.rem ? ((d.spin||0)>>1)&1 : 0; px(d.x+sp,d.y+4,1,1,'#c9cdd2'); px(d.x+2-sp,d.y+4,1,1,'#c9cdd2');
+    if (state==='play') { ctx.font=`bold ${Math.round(Math.max(9*dpr,s*2.2))}px ui-monospace,Menlo,monospace`;
+      ctx.fillStyle='#000a'; const t = d.rem ? `▼${d.rem}` : `TAP ◆${DRILL_COST}`; ctx.fillText(t,(d.x+1.5)*s+1,(d.y-4)*s+1); ctx.fillStyle=d.rem?'#9fd07a':'#f0d68a'; ctx.fillText(t,(d.x+1.5)*s,(d.y-4)*s); }
   }
   for (const p of pumps) { px(p.x+1,p.y,2,3,'#2a3440'); const a=p.spin; px(p.x+1.5+Math.cos(a)*.8,p.y+1+Math.sin(a)*.8,1,1,'#9fb7c8'); }
   for (const m of mgs) {
@@ -865,10 +925,10 @@ function drawEntities(s) {
   const gh = ghost();
   if (gh && !gh.cells.length && ghostPos) { ctx.strokeStyle='rgba(220,80,60,.8)'; ctx.lineWidth=Math.max(1,dpr); const gx=Math.floor(ghostPos.x)*s, gy=Math.floor(ghostPos.y)*s; ctx.strokeRect(gx-4*s,gy-4*s,9*s,9*s); ctx.beginPath(); ctx.moveTo(gx-4*s,gy-4*s); ctx.lineTo(gx+5*s,gy+5*s); ctx.moveTo(gx+5*s,gy-4*s); ctx.lineTo(gx-4*s,gy+5*s); ctx.stroke(); }
   if (gh) for (const c of gh.cells) { ctx.fillStyle = !c.ok ? 'rgba(200,60,40,.35)' : gh.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); }
-  if (gh && dragItem && dragItem.id==='depot' && ghostPos) {
+  if (gh && dragItem && dragItem.id==='gen' && ghostPos) {
     ctx.save(); ctx.strokeStyle='rgba(230,190,74,.55)'; ctx.lineWidth=Math.max(1,dpr); ctx.setLineDash([s*2,s*2]); ctx.beginPath();
-    for (let x=0;x<W;x++) { const y=(surfOrig[x]+DEPOT_MAX)*s; x ? ctx.lineTo(x*s,y) : ctx.moveTo(0,y); } ctx.stroke(); ctx.restore();
-    const c0 = gh.cells[0], r = depotRate(c0[0]+2, c0[1]+2), lx = c0[0]+2.5, ly = c0[1]-2;
+    for (let x=0;x<W;x++) { const y=(surfOrig[x]+GEN_MAX)*s; x ? ctx.lineTo(x*s,y) : ctx.moveTo(0,y); } ctx.stroke(); ctx.restore();
+    const c0 = gh.cells[0], r = genRate(c0[0]+GEN_W/2, c0[1]+GEN_H), lx = c0[0]+GEN_W/2, ly = c0[1]-2;
     ctx.font = `bold ${Math.round(Math.max(11*dpr, s*3))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center';
     ctx.fillStyle='#000a'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s+1, ly*s+1);
     ctx.fillStyle = r>0 ? '#f0d68a' : '#e05a40'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s, ly*s);
@@ -880,12 +940,6 @@ function drawOverlayUI(s) {
   if (state==='play') for (const sh2 of shells) if (sh2.y < cam.y) {
     const x=(sh2.x-cam.x)*s; const y=(70)*dpr; ctx.fillStyle = (tick>>2)&1 ? '#e04a30' : '#ffb060';
     ctx.beginPath(); ctx.moveTo(x-5*dpr,y); ctx.lineTo(x+5*dpr,y); ctx.lineTo(x,y+7*dpr); ctx.fill();
-  }
-  // HQ off-screen indicator
-  if (state==='play' && hq) {
-    const hy=(hq.y-cam.y)*s;
-    if (hy > cv.height-trayPx-10 || hy < 0) { const dn=hy>0; ctx.fillStyle='#c8a24a'; ctx.font=`bold ${11*dpr}px ui-monospace,monospace`; ctx.textAlign='center';
-      ctx.fillText(dn?'▼ COMMAND POST':'▲ COMMAND POST', cv.width/2, dn? cv.height-trayPx-8*dpr : 90*dpr); }
   }
 }
 
@@ -899,7 +953,7 @@ function renderMini() {
     mbuf[my*(W/4)+mx]=0xff000000|(B<<16)|(G<<8)|R;
   }
   mctx.putImageData(mimg,0,0);
-  mctx.fillStyle='#e04a30'; mctx.fillRect(hq.x/4,hq.y/4,hq.w/4,2);
+  mctx.fillStyle='#e04a30'; for (const gn of gens) mctx.fillRect(gn.x/4,gn.y/4,gn.w/4,2);
   mctx.fillStyle='#ff4'; for (const s of soldiers) mctx.fillRect(s.x/4|0, s.y/4-1|0, 1, 1);
   mctx.strokeStyle='#e8d6a0'; mctx.lineWidth=1; mctx.strokeRect(cam.x/4+.5, cam.y/4+.5, cv.width/scale/4-1, (cv.height-trayPx)/scale/4);
 }
@@ -942,17 +996,17 @@ const $ = id => document.getElementById(id);
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toast.t); toast.t=setTimeout(()=>t.style.opacity=0, 2600); }
 const ICONS = {
   repair:['........','...##...','...##...','.######.','.######.','...##...','...##...','........'],
-  fortify:['...#....','..###...','.#####..','#..#..#.','...#....','..###...','.#####..','#..#..#.'],
 };
 function drawIcon(cvs, id) {
   const c=cvs.getContext('2d'); c.clearRect(0,0,16,12);
   const mat = {prop:TIMBER,bags:BAGS,concrete:CONC,lamp:LAMP,pump:PUMP,mg:MG}[id];
-  if (ICONS[id]) { c.fillStyle = id==='repair' ? '#c0503a' : id==='fortify' ? '#e6bf4a' : '#d8c9a3'; ICONS[id].forEach((row,y)=>[...row].forEach((ch,x)=>{ if(ch==='#') c.fillRect(x+4,y+2,1,1); })); return; }
+  if (ICONS[id]) { c.fillStyle = '#c0503a'; ICONS[id].forEach((row,y)=>[...row].forEach((ch,x)=>{ if(ch==='#') c.fillRect(x+4,y+2,1,1); })); return; }
   const col = (t,v)=>`rgb(${palR[t*8+v]},${palG[t*8+v]},${palB[t*8+v]})`;
   if (id==='prop') { for(let x=2;x<14;x++){ c.fillStyle=col(TIMBER,(x*3)&7); c.fillRect(x,2,1,2); } for(let y=4;y<11;y++){ c.fillStyle=col(TIMBER,y&7); c.fillRect(2,y,1,1); c.fillRect(13,y,1,1);} }
   else if (id==='lamp') { c.fillStyle='#555'; c.fillRect(7,0,1,5); c.fillStyle='#ffe196'; c.fillRect(6,5,3,3); c.fillStyle='#ffe19633'; c.fillRect(3,4,9,7); }
   else if (id==='mg') { for(let y=6;y<11;y++) for(let x=3;x<13;x++){ c.fillStyle=col(BAGS,(x+y)&7); c.fillRect(x,y,1,1);} c.fillStyle='#1d211b'; c.fillRect(7,4,6,1); c.fillRect(6,5,3,1); }
-  else if (id==='depot') { for(let y=4;y<11;y++) for(let x=2;x<14;x++){ c.fillStyle=col(DEPOT,(x+y)&7); if (x===2||x===7||x===13||y===4||y===10) c.fillStyle='#3a3020'; c.fillRect(x,y,1,1);} c.fillStyle='#e6bf4a'; c.fillRect(4,6,2,2); c.fillRect(9,6,2,2); }
+  else if (id==='drill') { c.fillStyle='#5a5c60'; c.fillRect(5,0,6,1); c.fillRect(7,1,2,3); for(let y=4;y<9;y++) for(let x=6;x<10;x++){ c.fillStyle=((x+y)&3)?'#4e5056':'#aa8c28'; c.fillRect(x,y,1,1);} c.fillStyle='#c9cdd2'; c.fillRect(7,9,2,1); c.fillRect(7.5,10,1,2); }
+  else if (id==='gen') { for(let y=4;y<11;y++) for(let x=1;x<15;x++){ c.fillStyle=col(HQ,(x*y)&7); c.fillRect(x,y,1,1);} c.fillStyle='#232822'; c.fillRect(3,6,4,4); c.fillStyle='#a9b39a'; c.fillRect(4,7,2,2); c.fillStyle='#ffe9a8'; c.fillRect(9,6,1,1); c.fillRect(11,6,1,1); c.fillStyle='#2a2420'; c.fillRect(12,1,2,3); }
   else if (id==='pump') { for(let y=3;y<10;y++) for(let x=4;x<12;x++){ c.fillStyle=col(PUMP,(x*y)&7); c.fillRect(x,y,1,1);} c.fillStyle='#9fb7c8'; c.fillRect(7,5,2,2); c.fillStyle='#3a6a90'; c.fillRect(12,8,3,1); }
   else { const h=id==='bags'?5:7; for(let y=0;y<h;y++) for(let x=1;x<15;x++){ let v=(x*5+y*3)&7; c.fillStyle=col(mat,v); if(id==='bags'&&((x+((y&1)<<1))&3)===0) c.fillStyle='#5a4c34'; c.fillRect(x,11-h+y,1,1);} }
 }
@@ -970,14 +1024,16 @@ function refreshTray(){ for (const el of $('tray').children){ const it=ITEM[el.d
 function updateHUD() {
   const t=Math.floor(game.t); $('timeStat').textContent = String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');
   $('goldStat').textContent = '◆ '+gold;
-  const f=Math.max(0,hq.hp/hq.max); $('hqFill').style.width=(f*100)+'%'; $('hqBar').classList.toggle('hurt', f<.35);
-  $('hqText').textContent = 'COMMAND POST ' + Math.max(0,Math.ceil(hq.hp)) + (hq.level>1?' · LV'+hq.level:'');
+  const tot=gens.reduce((a,gn)=>a+Math.max(0,gn.hp),0), mx=gens.reduce((a,gn)=>a+gn.max,0)||1, weak=gens.reduce((a,gn)=>Math.min(a,gn.hp/gn.max),1);
+  $('hqFill').style.width=(tot/mx*100)+'%'; $('hqBar').classList.toggle('hurt', weak<.35);
+  const rate=gens.reduce((a,gn)=>a+gn.rate,0)*60;
+  $('hqText').textContent = `GEN ×${gens.length} · +${Math.round(rate)}◆/MIN`;
   refreshTray();
 }
 
 // ---------- input
 const pointers = new Map();
-let pendingAt = 0, gesture = null, ghostPos = null, dragItem = null, lastPan = 0, pinch = null;
+let drillTap = null, pendingAt = 0, gesture = null, ghostPos = null, dragItem = null, lastPan = 0, pinch = null;
 function pinchState(){ const ps=[...pointers.values()], a=ps[0], b=ps[1]||ps[0]; return { x:(a.x+b.x)/2, y:(a.y+b.y)/2, d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)) }; }
 function toWorld(cx, cy){ return { x: cam.x + cx*dpr/scale, y: cam.y + cy*dpr/scale }; }
 function ghost() {
@@ -1002,6 +1058,7 @@ cv.addEventListener('pointerdown', e => {
   cam.vy = 0; cam.vx = 0;
   if (pointers.size>=2) { gesture='pan2'; digAt=null; pinch=pinchState(); return; }
   const w = toWorld(e.clientX,e.clientY);
+  const dr = drillAt(w); if (dr) { gesture='drill'; drillTap={ d:dr, sx:e.clientX, sy:e.clientY }; return; }
   gesture='pending'; pendingAt=performance.now();   // becomes a dig unless a second finger lands quickly
 });
 addEventListener('pointermove', e => {
@@ -1030,6 +1087,7 @@ function endPointer(e) {
     dragItem=null; ghostPos=null; return;
   }
   if (!pointers.has(e.pointerId)) return;
+  if (gesture==='drill' && pointers.size===1 && e.type==='pointerup' && drillTap) { const p=pointers.get(e.pointerId); if (Math.hypot(p.x-drillTap.sx,p.y-drillTap.sy)<16) pressDrill(drillTap.d); }
   pointers.delete(e.pointerId); pinch=null;
   if (pointers.size===0) { if (performance.now()-lastPan>80) { cam.vy=0; cam.vx=0; } gesture=null; digAt=null; }
 }
@@ -1044,7 +1102,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 
 // ---------- game flow
 function show(id, on){ $(id).hidden = !on; }
-function resetEntities(){ pumps=[]; mgs=[]; depots=[]; bodies.length=0; rockChecks.length=0; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
+function resetEntities(){ gens=[]; drills=[]; pumps=[]; mgs=[]; bodies.length=0; rockChecks.length=0; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
 function startDemo() {
   demo = true; state='menu'; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(true);
@@ -1056,24 +1114,22 @@ function startGame() {
   demo = false; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(false);
   Object.assign(game, { t:0, mined:0, kills:0, nextEvent:22, harassAt:40, intensity:1, events:0 });
-  ITEM.fortify.cost = 120;
-  gold = 140; ITEM.depot.cost = 50; state='play';
+  gold = 140; ITEM.gen.cost = 150; state='play';
   ['menu','help','over','pause'].forEach(s=>show(s,false)); show('hud',true); show('tray',true); show('mini',true);
   cam.zoom=1; cam.x=0; buildTray(); resize();
-  cam.y = 0; cam.vy=0; cam.x = hq.x+hq.w/2 - cv.width/scale/2; clampCam();
+  cam.y = 0; cam.vy=0; cam.x = gens[0].x+GEN_W/2 - cv.width/scale/2; clampCam();
   const tips = [
-    [1,'Two fingers to scroll down to your COMMAND POST. Pinch to zoom.'],
+    [1,'Two fingers scroll & pinch. Your GENERATOR earns ◆ — keep it running.'],
     [7,'One finger digs — drag through earth beside a tunnel. Gold ore pays ◆.'],
     [14,'Unbraced ceilings crumble. Drag a PROP from the tray into a tunnel.'],
-    [19,'DEPOTs earn ◆ over time — more near the surface, where the shells land.'],
+    [13,'Tap a DRILL to bore 20 deeper for ◆10. It mines any ore it passes.'],
+    [20,'More GENERATORs = more ◆. Shallow pays best, but that is where shells land.'],
     [26,'Earth, BAGS and CONCRETE absorb blasts.'],
   ];
   for (const [t,msg] of tips) schedule(t, ()=>toast(msg));
 }
 function gameOver() {
   state='dying';
-  explode(hq.x+hq.w/2, hq.y+3, 16, {fire:1});
-  for (let y=hq.y;y<hq.y+hq.h;y++) for (let x=hq.x;x<hq.x+hq.w;x++) if (g[y*W+x]===HQ) { g[y*W+x]=rand()<.5?RUBBLE:FIRE; hp[y*W+x]=120; }
   haptic('error'); $('banner').style.opacity=0; $('toast').style.opacity=0;
   const t=Math.floor(game.t), best = Math.max(game.best, t), isBest = t>game.best && t>0;
   game.best = best; localStorage.setItem('sapper.best', best);
@@ -1122,7 +1178,8 @@ function update() {
   if (tick%6===0) processRockChecks();
   updateBodies();
   updateShells(); updateSoldiers(); updateMachines(); updateParticles();
-  if (state==='play') { game.t += 1/60; applyDig(); updateDirector(); if (hq.hp<=0) gameOver(); }
+  updateGens(); updateDrills();
+  if (state==='play') { game.t += 1/60; applyDig(); updateDirector(); }
   else if (state==='menu') { game.t += 1/60; updateDemo(); if (tick-demoStart > 60*75) startDemo(); }
   else if (state==='dying') game.t += 1/60;
   shake *= .88; if (shake<.2) shake=0;
@@ -1133,7 +1190,7 @@ function frame(now) {
   if (state==='play'||state==='menu'||state==='dying') {
     acc += dt; let n=0; while (acc >= 1/60 && n<3) { update(); acc -= 1/60; n++; } if (n===3) acc=0;
   }
-  if (state==='menu') { cam.x = Math.max(0, hq.x+hq.w/2 - cv.width/scale/2); const tgt = Math.max(-10, (hq.y - viewRows()*.55) * (.5 - .5*Math.cos((tick-demoStart)/700))); cam.y += (tgt-cam.y)*.02; }
+  if (state==='menu') { const g0=gens[0]||{x:W/2,y:80,w:0}; cam.x = Math.max(0, g0.x+g0.w/2 - cv.width/scale/2); const tgt = Math.max(-10, (g0.y+20 - viewRows()*.55) * (.5 - .5*Math.cos((tick-demoStart)/700))); cam.y += (tgt-cam.y)*.02; }
   else if (state==='play' && pointers.size===0) { cam.y += cam.vy; cam.x += cam.vx; cam.vy *= .92; cam.vx *= .92; if (Math.abs(cam.vy)<.01) cam.vy=0; if (Math.abs(cam.vx)<.01) cam.vx=0;
     clampCam(); }
   if (gesture==='pending' && pointers.size===1 && performance.now()-pendingAt>70) gesture='dig';
@@ -1141,7 +1198,7 @@ function frame(now) {
   render();
   if (state==='play') { updateHUD(); if (++frameN % 12 === 0) renderMini(); }
 }
-window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get hq(){return hq;}, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
+window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
 updateBest(); startDemo(); resize(); requestAnimationFrame(frame);
 </script>
 </body>
