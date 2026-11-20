@@ -333,7 +333,7 @@ const ITEMS = [
   { id:'pump',     name:'PUMP',    cost:40,  kind:'stamp' },
   { id:'mg',       name:'MG', cost:60,  kind:'stamp' },
   { id:'drill',    name:'DRILL',   cost:30,  kind:'stamp' },
-  { id:'gen',      name:'GENERATOR',cost:150, kind:'stamp' },
+  { id:'gen',      name:'GENERATOR',cost:100, kind:'stamp' },
   { id:'repair',   name:'REPAIR',  cost:40,  kind:'action' },
 ];
 const ITEM = Object.fromEntries(ITEMS.map(i=>[i.id,i]));
@@ -1138,7 +1138,7 @@ function startGame() {
   demo = false; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(false);
   Object.assign(game, { t:0, mined:0, kills:0, nextEvent:22, harassAt:30, intensity:1, events:0 });
-  gold = 140; ITEM.gen.cost = 150; drawMode = false; state='play';
+  gold = 140; ITEM.gen.cost = 100; drawMode = false; state='play';
   ['menu','help','over','pause'].forEach(s=>show(s,false)); show('hud',true); show('tray',true); show('mini',true);
   cam.zoom=1; cam.x=0; buildTray(); resize();
   cam.y = 0; cam.vy=0; cam.x = gens[0].x+GEN_W/2 - cv.width/scale/2; clampCam();
