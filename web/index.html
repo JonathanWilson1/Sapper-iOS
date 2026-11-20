@@ -31,14 +31,14 @@
   #banner small{display:block;font-size:11px;letter-spacing:2px;color:var(--ink);opacity:.85}
   #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 96px);max-width:86vw;background:var(--panel);
     border:2px solid var(--edge);padding:8px 12px;font-size:12px;line-height:1.4;opacity:0;transition:opacity .3s;pointer-events:none;z-index:4;text-align:center}
-  #mini{position:fixed;right:6px;top:calc(env(safe-area-inset-top) + 44px);width:30px;height:103px;image-rendering:pixelated;border:2px solid var(--edge);z-index:5;background:#000}
+  #mini{position:fixed;right:6px;top:calc(env(safe-area-inset-top) + 44px);width:40px;height:92px;image-rendering:pixelated;border:2px solid var(--edge);z-index:5;background:#000}
   #tray{position:fixed;left:0;right:0;bottom:0;padding:6px 6px calc(env(safe-area-inset-bottom) + 6px);background:linear-gradient(#1a140ff0,#0d0a07);
-    border-top:2px solid var(--edge);display:flex;gap:5px;overflow-x:auto;touch-action:pan-x;z-index:5;scrollbar-width:none}
+    border-top:2px solid var(--edge);display:flex;gap:4px;overflow:hidden;touch-action:none;z-index:5}
   #tray::-webkit-scrollbar{display:none}
-  .item{flex:0 0 auto;width:58px;height:62px;background:#211912;border:2px solid var(--edge);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative}
-  .item canvas{width:32px;height:24px;image-rendering:pixelated}
-  .item b{font-size:9px;letter-spacing:1px}
-  .item i{font-style:normal;font-size:10px;color:#e6bf4a}
+  .item{flex:1 1 0;min-width:0;height:58px;background:#211912;border:2px solid var(--edge);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative}
+  .item canvas{width:28px;height:21px;image-rendering:pixelated;pointer-events:none}
+  .item b{font-size:7.5px;letter-spacing:0;white-space:nowrap;pointer-events:none}
+  .item i{font-style:normal;font-size:9.5px;color:#e6bf4a;pointer-events:none}
   .item.sel{border-color:var(--brass);background:#2e2416;box-shadow:inset 0 0 0 1px #000}
   .item.poor i{color:#8a5a4a}
   .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:10;
@@ -73,7 +73,7 @@
 </div>
 <div id="banner"></div>
 <div id="toast"></div>
-<canvas id="mini" width="32" height="110" hidden></canvas>
+<canvas id="mini" width="48" height="110" hidden></canvas>
 <div id="tray" hidden></div>
 
 <div id="menu" class="screen">
@@ -89,8 +89,9 @@
 <div id="help" class="screen" hidden>
   <div class="card">
     <h2>FIELD MANUAL</h2>
-    <p><em>Drag</em> to scroll your sector. <em>Two fingers</em> always scroll.</p>
-    <p><em>DIG</em>: select, then drag through earth. Rock is slow. Gold ore pays ◆.</p>
+    <p><em>Drag</em> open ground to scroll. <em>Two fingers</em> always scroll and pinch to zoom.</p>
+    <p><em>Dig</em>: touch earth beside any tunnel and drag. Rock is slow. Gold ore pays ◆.</p>
+    <p><em>DEPOT</em> earns ◆ over time. Shallow depots pay most but sit under the shells; none work below the dashed line.</p>
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>BAGS</em> and <em>CONCRETE</em> soak up shellfire.</p>
     <p><em>PUMP</em> drains floods. <em>LAMP</em> lights the dark. <em>MG NEST</em> cuts down raiders.</p>
@@ -119,14 +120,17 @@
 // =====================================================================
 //  SAPPER — falling-sand bunker survival.  Single file, no network.
 // =====================================================================
-const W = 128, H = 440;
+const W = 192, H = 440;
+const OX = (W-128)/2;              // base layout offset (layout was designed at 128 wide)
+const VIEWW = 112, ZMIN = VIEWW/W;  // cells visible across the screen at zoom 1
 const E=0,SOIL=1,SAND=2,ROCK=3,WATER=4,TIMBER=5,BAGS=6,CONC=7,GOLD=8,RUBBLE=9,FIRE=10,HQ=11,PUMP=12,MG=13,BED=14,GRASS=15,LAMP=16;
-const NT = 17;
+const DEPOT=17;
+const NT = 18;
 const SOLID = new Uint8Array(NT).fill(1); SOLID[E]=0; SOLID[WATER]=0; SOLID[FIRE]=0;
 //            E  SOIL SAND ROCK WATR TIMB BAGS CONC GOLD RUBB FIRE HQ  PUMP MG   BED GRAS LAMP
-const RES  = [0, 1,   .8,  2.5, .4,  1.5, 3.5, 6,   2.5, .6,  0,   5,  3,   3,   99, 1,   .5];
-const HARD = [0, 0,   0,   2.5, 0,   1,   2.5, 5.5, 2.5, 0,   0,   99, 3,   3,  999, 0,   0];
-const DIGT = [0, 4,   2,   30,  0,   20,  20,  90,  24,  2,   0,   0,  0,   0,   0,  4,   4];
+const RES  = [0, 1,   .8,  2.5, .4,  1.5, 3.5, 6,   2.5, .6,  0,   5,  3,   3,   99, 1,   .5, 3];
+const HARD = [0, 0,   0,   2.5, 0,   1,   2.5, 5.5, 2.5, 0,   0,   99, 3,   3,  999, 0,   0,  2];
+const DIGT = [0, 4,   2,   30,  0,   0,   0,   0,   24,  2,   0,   0,  0,   0,   0,  4,   0,  0];
 const SUPPORTS = new Uint8Array(NT); SUPPORTS[TIMBER]=1; SUPPORTS[CONC]=1; SUPPORTS[BAGS]=1; SUPPORTS[HQ]=1;
 
 // ---------- world state
@@ -143,7 +147,7 @@ const surfOrig = new Int16Array(W);
 const SKY = 44;
 
 let tick = 0, stampV = 1;
-let hq = null, pumps = [], mgs = [], soldiers = [], shells = [], particles = [], flashes = [], tracers = [], popups = [], flares = [], timers = [];
+let hq = null, pumps = [], mgs = [], depots = [], soldiers = [], shells = [], particles = [], flashes = [], tracers = [], popups = [], flares = [], timers = [];
 let shake = 0, gold = 0, rainUntil = 0, demo = true;
 const game = { t: 0, best: +(localStorage.getItem('sapper.best')||0), mined: 0, kills: 0, nextEvent: 22, harassAt: 40, intensity: 1, events: 0 };
 let state = 'menu';
@@ -167,7 +171,7 @@ function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul
 const PAL = { // base rgb, variance
   [SOIL]:[74,52,36,14],[SAND]:[170,140,86,16],[ROCK]:[86,86,92,14],[WATER]:[36,84,132,12],[TIMBER]:[116,80,44,16],
   [BAGS]:[132,116,78,12],[CONC]:[120,116,106,10],[GOLD]:[214,168,44,26],[RUBBLE]:[96,76,58,16],[HQ]:[64,72,58,8],
-  [PUMP]:[68,80,92,8],[MG]:[58,62,54,8],[BED]:[24,22,26,6],[GRASS]:[72,80,38,12],[LAMP]:[255,224,150,0],[FIRE]:[255,140,40,0]
+  [PUMP]:[68,80,92,8],[MG]:[58,62,54,8],[BED]:[24,22,26,6],[GRASS]:[72,80,38,12],[LAMP]:[255,224,150,0],[DEPOT]:[104,88,54,10],[FIRE]:[255,140,40,0]
 };
 const palR=new Uint8Array(NT*8), palG=new Uint8Array(NT*8), palB=new Uint8Array(NT*8);
 for (const k in PAL) { const [r,gg,b,v]=PAL[k]; for(let s=0;s<8;s++){ const o=(s-3.5)/3.5*v; palR[k*8+s]=Math.max(0,Math.min(255,r+o)); palG[k*8+s]=Math.max(0,Math.min(255,gg+o*.9)); palB[k*8+s]=Math.max(0,Math.min(255,b+o*.8)); } }
@@ -221,46 +225,46 @@ function setCell(x,y,t){ if(!inB(x,y)) return; const i=idx(x,y); g[i]=t; hp[i]=0
 function fillRect(x0,y0,w,h,t){ for(let y=y0;y<y0+h;y++) for(let x=x0;x<x0+w;x++) setCell(x,y,t); }
 
 function buildBase(isDemo) {
-  const sx = 64, fy = surfOrig[64] + 58;
+  const O = OX, fy = surfOrig[64+O] + 58;
   // clear hazards around the base zone
-  for (let y=SKY;y<fy+14;y++) for (let x=26;x<104;x++){ const i=idx(x,y); if (y>=surfOrig[x]) { if (g[i]===WATER||g[i]===SAND) g[i]=SOIL; if (g[i]===ROCK && y<fy+4 && x<96) g[i]=SOIL; bgc[i]=1; } }
+  for (let y=SKY;y<fy+14;y++) for (let x=26+O;x<104+O;x++){ const i=idx(x,y); if (y>=surfOrig[x]) { if (g[i]===WATER||g[i]===SAND) g[i]=SOIL; if (g[i]===ROCK && y<fy+4 && x<96+O) g[i]=SOIL; bgc[i]=1; } }
   // surface trench + parapet
-  for (let x=26;x<56;x++){ const s0=surfOrig[x]; for(let y=s0;y<s0+5;y++) setCell(x,y,E); }
+  for (let x=26+O;x<56+O;x++){ const s0=surfOrig[x]; for(let y=s0;y<s0+5;y++) setCell(x,y,E); }
   const bag = (x,w) => { const s0=Math.min(...Array.from({length:w},(_,k)=>surfOrig[x+k])); fillRect(x,s0-2,w,2,BAGS); };
-  bag(21,6); bag(55,6);
+  bag(21+O,6); bag(55+O,6);
   // shaft, with timber collars on its walls
-  const s34 = surfOrig[34];
-  fillRect(34,s34+4,7,fy-s34-4,E);
-  for (let y=s34+8; y<fy-14; y+=8) { setCell(33,y,TIMBER); setCell(41,y,TIMBER); }
-  // command chamber: timber beam ceiling, posts, concrete floor
-  fillRect(34,fy-13,58,13,E);
-  fillRect(32,fy,62,2,CONC);
-  hq = { x:58, y:fy-7, w:14, h:7, hp:100, max:100, level:1 };
+  const s34 = surfOrig[34+O];
+  fillRect(34+O,s34+4,7,fy-s34-4,E);
+  for (let y=s34+8; y<fy-14; y+=8) { setCell(33+O,y,TIMBER); setCell(41+O,y,TIMBER); }
+  // command chamber: timber bracing, concrete floor
+  fillRect(34+O,fy-13,58,13,E);
+  fillRect(32+O,fy,62,2,CONC);
+  hq = { x:58+O, y:fy-7, w:14, h:7, hp:100, max:100, level:1 };
   fillRect(hq.x,hq.y,hq.w,hq.h,HQ);
   const frame = (L,R,top,bot,posts) => { const mark=(x,y)=>{ if (inB(x,y)) prop[idx(x,y)]=1; }; for (let x=L;x<=R;x++){ mark(x,top); mark(x,top+1); } for (const p of posts) for (let y=top+2;y<=bot;y++) mark(p,y); };
-  frame(41,91,fy-13,fy-1,[41,52,77,91]);
-  place('lamp', 47, fy-11, true); place('lamp', 84, fy-11, true); place('lamp', 34, s34+16, true);
+  frame(41+O,91+O,fy-13,fy-1,[41+O,52+O,77+O,91+O]);
+  place('lamp', 47+O, fy-11, true); place('lamp', 84+O, fy-11, true); place('lamp', 34+O, s34+16, true);
   // a gold vein to teach mining, just off the chamber
-  for (let y=fy-10;y<fy;y++) for (let x=92;x<104;x++) if (hash2(x,y,seed+5)<.55) setCell(x,y, hash2(x,y,seed+6)<.45?GOLD:ROCK);
+  for (let y=fy-10;y<fy;y++) for (let x=92+O;x<104+O;x++) if (hash2(x,y,seed+5)<.55) setCell(x,y, hash2(x,y,seed+6)<.45?GOLD:ROCK);
   if (isDemo) {
-    place('mg', 47, surfOrig[47]+4, true);
-    place('pump', 46, fy-2, true);
-    fillRect(92,fy-12,22,12,E); frame(92,113,fy-12,fy-1,[100,113]); place('lamp',107,fy-10,true);
-    fillRect(80,fy+2,7,38,E); fillRect(50,fy+38,40,9,E); frame(50,89,fy+38,fy+46,[50,64,79,89]); place('lamp',70,fy+40,true);
+    place('mg', 47+O, surfOrig[47+O]+4, true);
+    place('pump', 46+O, fy-2, true);
+    fillRect(92+O,fy-12,22,12,E); frame(92+O,113+O,fy-12,fy-1,[100+O,113+O]); place('lamp',107+O,fy-10,true);
+    fillRect(80+O,fy+2,7,38,E); fillRect(50+O,fy+38,40,9,E); frame(50+O,89+O,fy+38,fy+46,[50+O,64+O,79+O,89+O]); place('lamp',70+O,fy+40,true);
+    fillRect(110+O,fy-30,24,9,E); frame(110+O,133+O,fy-30,fy-22,[110+O,133+O]); place('depot',121+O,fy-23,true);
   }
   computeSupport();
 }
 
 // ---------- structures / stamps
 const ITEMS = [
-  { id:'pan',      name:'MOVE',    cost:0,   kind:'tool' },
-  { id:'dig',      name:'DIG',     cost:0,   kind:'tool' },
   { id:'prop',     name:'PROP',    cost:10,  kind:'stamp' },
   { id:'bags',     name:'BAGS',    cost:8,   kind:'stamp' },
   { id:'concrete', name:'CONCRETE',cost:25,  kind:'stamp' },
   { id:'lamp',     name:'LAMP',    cost:4,   kind:'stamp' },
   { id:'pump',     name:'PUMP',    cost:40,  kind:'stamp' },
-  { id:'mg',       name:'MG NEST', cost:60,  kind:'stamp' },
+  { id:'mg',       name:'MG', cost:60,  kind:'stamp' },
+  { id:'depot',    name:'DEPOT',   cost:50,  kind:'stamp' },
   { id:'repair',   name:'REPAIR',  cost:40,  kind:'action' },
   { id:'fortify',  name:'FORTIFY', cost:120, kind:'action' },
 ];
@@ -285,16 +289,21 @@ function propCells(cx, cy) {
   return out;
 }
 function rectCells(cx,cy,w,h,t){ const out=[]; const x0=Math.round(cx-w/2), y0=Math.round(cy-h/2); for(let y=0;y<h;y++) for(let x=0;x<w;x++) out.push([x0+x,y0+y,t]); return out; }
+// drop a block straight down until it lands, so releasing it over open air just works
+function dropRect(cx,cy,w,h,t){ let best=rectCells(cx,cy,w,h,t);
+  for (let k=0;k<48;k++){ const cs=rectCells(cx,cy+k,w,h,t); if (cs.some(c=>!free(c[0],c[1]))) break; best=cs; const by=cs[0][1]+h; if (cs.slice(-w).some(c=>!free(c[0],by))) break; }
+  return best; }
 function stampFor(id, cx, cy) {
   cx = Math.floor(cx); cy = Math.floor(cy);
   let cells, needAll=false;
   switch (id) {
     case 'prop': cells = propCells(cx,cy); if (!cells) return { cells:[], ok:false }; break;
-    case 'bags': cells = rectCells(cx,cy,9,3,BAGS); break;
-    case 'concrete': cells = rectCells(cx,cy,10,4,CONC); break;
+    case 'bags': cells = dropRect(cx,cy,9,3,BAGS); break;
+    case 'concrete': cells = dropRect(cx,cy,10,4,CONC); break;
     case 'lamp': cells = [[cx,cy,LAMP]]; needAll=true; break;
-    case 'pump': cells = rectCells(cx,cy,4,3,PUMP); needAll=true; break;
-    case 'mg': cells = rectCells(cx,cy,5,2,MG); needAll=true; break;
+    case 'pump': cells = dropRect(cx,cy,4,3,PUMP); needAll=true; break;
+    case 'mg': cells = dropRect(cx,cy,5,2,MG); needAll=true; break;
+    case 'depot': cells = dropRect(cx,cy,5,3,DEPOT); needAll=true; break;
     default: return { cells:[], ok:false };
   }
   const set = new Set(cells.map(c=>c[1]*W+c[0]));
@@ -306,17 +315,21 @@ function stampFor(id, cx, cy) {
     for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) { const nx=c[0]+dx, ny=c[1]+dy; if (inB(nx,ny) && !set.has(ny*W+nx) && (SOLID[g[idx(nx,ny)]] || prop[idx(nx,ny)])) anchored=true; }
   }
   const ok = anchored && (needAll ? placeable===cells.length : placeable >= cells.length*.5);
+  if (id==='depot' && depotRate(cells[0][0]+2,cells[0][1]+2)<=0) return { cells, ok:false, tooDeep:true };
   return { cells, ok };
 }
+const DEPOT_MAX = 110;
+function depotRate(x,y){ const d=Math.max(0, y - surfOrig[Math.max(0,Math.min(W-1,x))]); return d>DEPOT_MAX ? 0 : 1.2*(1-d/140); }  // ◆ per second: supply thins out the deeper it has to go
 function place(id, cx, cy, freeOfCharge) {
   const it = ITEM[id];
   if (!freeOfCharge && gold < it.cost) { toast('Not enough gold — dig for ore ◆'); sfx.deny(); return false; }
   const s = stampFor(id, cx, cy);
-  if (!s.ok) { if (!freeOfCharge) { toast(id==='prop' ? 'Drop props inside a tunnel or on solid ground' : 'Needs open space touching solid ground'); sfx.deny(); } return false; }
+  if (!s.ok) { if (!freeOfCharge) { toast(s.tooDeep ? 'Too deep — supplies can\'t reach below the dashed line' : id==='prop' ? 'Drop props inside a tunnel or on solid ground' : 'Needs open space touching solid ground'); sfx.deny(); } return false; }
   for (const c of s.cells) if (c.ok) { if (c[2]===PROPBG) prop[idx(c[0],c[1])]=1; else setCell(c[0],c[1],c[2]); }
   if (id==='pump') { const c=s.cells[0]; pumps.push({ x:c[0], y:c[1], spin:0 }); }
   if (id==='mg')   { const c=s.cells[0]; mgs.push({ x:c[0], y:c[1], cool:0, ang:-Math.PI/2, flash:0 }); }
-  if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); }
+  if (id==='depot'){ const c=s.cells[0]; depots.push({ x:c[0], y:c[1], acc:0, n:0, rate:depotRate(c[0]+2,c[1]+2) }); }
+  if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); if (id==='depot') { it.cost += 25; buildTray(); } }
   return true;
 }
 function doAction(id) {
@@ -487,7 +500,7 @@ function workOn(s, x, y) {
   if (!inB(x,y)) return;
   const i=y*W+x, t=g[i];
   if (t===HQ) { hq.hp -= .012; s.atk=6; return; }
-  const need = { [SOIL]:14,[GRASS]:14,[SAND]:8,[RUBBLE]:8,[ROCK]:110,[GOLD]:100,[TIMBER]:50,[BAGS]:70,[CONC]:260,[PUMP]:90,[MG]:90,[LAMP]:20 }[t];
+  const need = { [SOIL]:14,[GRASS]:14,[SAND]:8,[RUBBLE]:8,[ROCK]:110,[GOLD]:100,[TIMBER]:50,[BAGS]:70,[CONC]:260,[PUMP]:90,[MG]:90,[LAMP]:20,[DEPOT]:90 }[t];
   if (!need) return;
   s.work++; s.atk=4;
   if (s.work>=need) { g[i]=E; hp[i]=0; s.work=0; }
@@ -522,6 +535,12 @@ function updateSoldiers() {
 
 // ---------- pumps & machine guns
 function updateMachines() {
+  for (let k=depots.length-1;k>=0;k--) {
+    const d=depots[k]; if (g[idx(d.x,d.y)]!==DEPOT) { depots.splice(k,1); continue; }
+    if (state!=='play') continue;
+    d.acc += d.rate/60;
+    if (d.acc>=1) { d.acc-=1; gold+=1; if (++d.n%4===0) popup(d.x+2.5,d.y-1,'+◆'); }
+  }
   for (let k=pumps.length-1;k>=0;k--) {
     const p=pumps[k]; if (g[idx(p.x,p.y)]!==PUMP) { pumps.splice(k,1); continue; }
     if (tick%3) continue;
@@ -594,7 +613,7 @@ function applyDig() {
 // ---------- director: events over time
 function schedule(delay, fn){ timers.push({at: game.t + delay, fn}); }
 function banner(title, sub){ const b=document.getElementById('banner'); b.innerHTML = title + (sub?`<small>${sub}</small>`:''); b.style.opacity=1; clearTimeout(banner.t); banner.t=setTimeout(()=>b.style.opacity=0, 2800); }
-function pickX(){ return rand()<.6 ? Math.max(2,Math.min(W-3, hq.x+hq.w/2 + (rand()-.5)*56)) : 2+rand()*(W-4); }
+function pickX(){ return rand()<.7 ? Math.max(2,Math.min(W-3, hq.x+hq.w/2 + (rand()-.5)*56)) : 2+rand()*(W-4); }
 const EVENTS = [
   { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); const n=6+Math.round(game.intensity*3); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); } },
   { id:'heavy',   w:2, after:80,  run(){ banner('HEAVY GUNS','DEEP PENETRATING SHELLS'); const n=2+Math.round(game.intensity); for(let k=0;k<n;k++) schedule(2.5+k*1.6+rand(), ()=>spawnShell('heavy', pickX())); } },
@@ -621,7 +640,7 @@ function updateDirector() {
     game.nextEvent = game.t + Math.max(11, 30 - game.t/14) + rand()*6;
   }
   if (game.t < rainUntil) rainTick(2+game.intensity); else if (sfx.raining) sfx.rain(false);
-  if (tick % Math.max(30, 90 - hq.level*15) === 0) gold += 1;
+  if (tick % (150 - hq.level*20) === 0) gold += 1;
   if (tick % 30 === 0) { // flood damage
     let wet=0; for (let y=hq.y-1;y<=hq.y+hq.h;y++) for (let x=hq.x-1;x<=hq.x+hq.w;x++) if (inB(x,y) && g[y*W+x]===WATER) wet++;
     if (wet>3) { hq.hp -= wet*.06; hq.hit=6; if (!updateDirector.wt || game.t-updateDirector.wt>8) { updateDirector.wt=game.t; toast('Command post is flooding! Drop a PUMP nearby'); } }
@@ -650,11 +669,11 @@ const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 let dpr=1, scale=4, trayPx=0;
 function viewRows(){ return cv.height/scale; }
 function clampCam(){ const max = H - (cv.height - trayPx)/scale + 2; cam.y = Math.max(-14, Math.min(max, cam.y)); cam.x = Math.max(0, Math.min(W - cv.width/scale, cam.x)); }
-function zoomAt(z, ax, ay){ z=Math.max(1,Math.min(3.5,z)); const wx=cam.x+ax*dpr/scale, wy=cam.y+ay*dpr/scale; cam.zoom=z; scale=cv.width/W*z; cam.x=wx-ax*dpr/scale; cam.y=wy-ay*dpr/scale; clampCam(); }
+function zoomAt(z, ax, ay){ z=Math.max(ZMIN,Math.min(3.5,z)); const wx=cam.x+ax*dpr/scale, wy=cam.y+ay*dpr/scale; cam.zoom=z; scale=cv.width/VIEWW*z; cam.x=wx-ax*dpr/scale; cam.y=wy-ay*dpr/scale; clampCam(); }
 function resize() {
   dpr = Math.min(3, window.devicePixelRatio||1);
   cv.width = Math.round(innerWidth*dpr); cv.height = Math.round(innerHeight*dpr);
-  scale = cv.width / W * cam.zoom;
+  scale = cv.width / VIEWW * cam.zoom;
   const tray = document.getElementById('tray'); trayPx = tray.hidden ? 0 : tray.offsetHeight*dpr;
   clampCam();
 }
@@ -714,6 +733,7 @@ function render() {
           if (t===GOLD) { lit=Math.max(lit,.55); if (((sh[i]*7+(tk>>2))%97)===0) { R=G=255; B=220; } }
           else if (t===BAGS) { if (((x+((y&1)<<1))&3)===0) { R-=28;G-=26;B-=20; } }
           else if (t===TIMBER) { if (((x*3+y)%7)===0) { R-=22;G-=18;B-=12; } }
+          else if (t===DEPOT) { if (x%5===0 || y%3===0) { R-=30;G-=26;B-=18; } else if ((x+y*2)%7===0) { R+=40;G+=30; } }
           else if (t===CONC) { if (((x+y*5)%11)===0) { R-=16;G-=16;B-=16; } }
           else if (t===GRASS && y>0 && g[i-W]===E && (v&1)) { R+=18; G+=22; }
           else if (t===HQ && hq && hq.hit>0) { R+=60; }
@@ -777,6 +797,14 @@ function drawEntities(s) {
   const gh = ghost();
   if (gh && !gh.cells.length && ghostPos) { ctx.strokeStyle='rgba(220,80,60,.8)'; ctx.lineWidth=Math.max(1,dpr); const gx=Math.floor(ghostPos.x)*s, gy=Math.floor(ghostPos.y)*s; ctx.strokeRect(gx-4*s,gy-4*s,9*s,9*s); ctx.beginPath(); ctx.moveTo(gx-4*s,gy-4*s); ctx.lineTo(gx+5*s,gy+5*s); ctx.moveTo(gx+5*s,gy-4*s); ctx.lineTo(gx-4*s,gy+5*s); ctx.stroke(); }
   if (gh) for (const c of gh.cells) { ctx.fillStyle = !c.ok ? 'rgba(200,60,40,.35)' : gh.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); }
+  if (gh && dragItem && dragItem.id==='depot' && ghostPos) {
+    ctx.save(); ctx.strokeStyle='rgba(230,190,74,.55)'; ctx.lineWidth=Math.max(1,dpr); ctx.setLineDash([s*2,s*2]); ctx.beginPath();
+    for (let x=0;x<W;x++) { const y=(surfOrig[x]+DEPOT_MAX)*s; x ? ctx.lineTo(x*s,y) : ctx.moveTo(0,y); } ctx.stroke(); ctx.restore();
+    const c0 = gh.cells[0], r = depotRate(c0[0]+2, c0[1]+2), lx = c0[0]+2.5, ly = c0[1]-2;
+    ctx.font = `bold ${Math.round(Math.max(11*dpr, s*3))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center';
+    ctx.fillStyle='#000a'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s+1, ly*s+1);
+    ctx.fillStyle = r>0 ? '#f0d68a' : '#e05a40'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s, ly*s);
+  }
   if (digAt && state==='play') { ctx.strokeStyle='#e8d6a088'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.arc(digAt.x*s,digAt.y*s,2.7*s,0,6.29); ctx.stroke(); }
 }
 function drawOverlayUI(s) {
@@ -794,13 +822,13 @@ function drawOverlayUI(s) {
 }
 
 // ---------- minimap
-const mini = document.getElementById('mini'), mctx = mini.getContext('2d'), mimg = mctx.createImageData(32,110), mbuf = new Uint32Array(mimg.data.buffer);
+const mini = document.getElementById('mini'), mctx = mini.getContext('2d'), mimg = mctx.createImageData(W/4,110), mbuf = new Uint32Array(mimg.data.buffer);
 function renderMini() {
-  for (let my=0;my<110;my++) for (let mx=0;mx<32;mx++) {
+  for (let my=0;my<110;my++) for (let mx=0;mx<W/4;mx++) {
     const t=g[(my*4+1)*W+mx*4+1]; let R,G,B;
     if (t===E) { const w=bgc[(my*4+1)*W+mx*4+1]; R=w?20:30;G=w?14:24;B=w?10:30; } else { R=palR[t*8+3];G=palG[t*8+3];B=palB[t*8+3]; }
     if (t===WATER) { R=50;G=110;B=170; }
-    mbuf[my*32+mx]=0xff000000|(B<<16)|(G<<8)|R;
+    mbuf[my*(W/4)+mx]=0xff000000|(B<<16)|(G<<8)|R;
   }
   mctx.putImageData(mimg,0,0);
   mctx.fillStyle='#e04a30'; mctx.fillRect(hq.x/4,hq.y/4,hq.w/4,2);
@@ -843,10 +871,7 @@ function haptic(kind){ try { window.webkit.messageHandlers.haptic.postMessage(ki
 // ---------- UI
 const $ = id => document.getElementById(id);
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toast.t); toast.t=setTimeout(()=>t.style.opacity=0, 2600); }
-let tool = 'pan';
 const ICONS = {
-  pan:  ['...#....','..###...','...#....','#.###.#.','#######.','#.###.#.','...#....','..###...'],
-  dig:  ['.####...','#....#..','.....##.','....#.#.','...#....','..#.....','.#......','#.......'],
   repair:['........','...##...','...##...','.######.','.######.','...##...','...##...','........'],
   fortify:['...#....','..###...','.#####..','#..#..#.','...#....','..###...','.#####..','#..#..#.'],
 };
@@ -858,20 +883,21 @@ function drawIcon(cvs, id) {
   if (id==='prop') { for(let x=2;x<14;x++){ c.fillStyle=col(TIMBER,(x*3)&7); c.fillRect(x,2,1,2); } for(let y=4;y<11;y++){ c.fillStyle=col(TIMBER,y&7); c.fillRect(2,y,1,1); c.fillRect(13,y,1,1);} }
   else if (id==='lamp') { c.fillStyle='#555'; c.fillRect(7,0,1,5); c.fillStyle='#ffe196'; c.fillRect(6,5,3,3); c.fillStyle='#ffe19633'; c.fillRect(3,4,9,7); }
   else if (id==='mg') { for(let y=6;y<11;y++) for(let x=3;x<13;x++){ c.fillStyle=col(BAGS,(x+y)&7); c.fillRect(x,y,1,1);} c.fillStyle='#1d211b'; c.fillRect(7,4,6,1); c.fillRect(6,5,3,1); }
+  else if (id==='depot') { for(let y=4;y<11;y++) for(let x=2;x<14;x++){ c.fillStyle=col(DEPOT,(x+y)&7); if (x===2||x===7||x===13||y===4||y===10) c.fillStyle='#3a3020'; c.fillRect(x,y,1,1);} c.fillStyle='#e6bf4a'; c.fillRect(4,6,2,2); c.fillRect(9,6,2,2); }
   else if (id==='pump') { for(let y=3;y<10;y++) for(let x=4;x<12;x++){ c.fillStyle=col(PUMP,(x*y)&7); c.fillRect(x,y,1,1);} c.fillStyle='#9fb7c8'; c.fillRect(7,5,2,2); c.fillStyle='#3a6a90'; c.fillRect(12,8,3,1); }
   else { const h=id==='bags'?5:7; for(let y=0;y<h;y++) for(let x=1;x<15;x++){ let v=(x*5+y*3)&7; c.fillStyle=col(mat,v); if(id==='bags'&&((x+((y&1)<<1))&3)===0) c.fillStyle='#5a4c34'; c.fillRect(x,11-h+y,1,1);} }
 }
 function buildTray() {
   const tray=$('tray'); tray.innerHTML='';
   for (const it of ITEMS) {
-    const el=document.createElement('div'); el.className='item'+(tool===it.id?' sel':''); el.dataset.id=it.id;
+    const el=document.createElement('div'); el.className='item'; el.dataset.id=it.id;
     const ic=document.createElement('canvas'); ic.width=16; ic.height=12; drawIcon(ic,it.id);
     el.append(ic); const b=document.createElement('b'); b.textContent=it.name; el.append(b);
-    const i=document.createElement('i'); i.textContent = it.cost ? '◆'+it.cost : it.id==='pan'?'scroll':'free'; el.append(i);
+    const i=document.createElement('i'); i.textContent = '◆'+it.cost; el.append(i);
     tray.append(el);
   }
 }
-function refreshTray(){ for (const el of $('tray').children){ const it=ITEM[el.dataset.id]; el.classList.toggle('sel', tool===it.id); el.classList.toggle('poor', it.cost>gold); } }
+function refreshTray(){ for (const el of $('tray').children){ const it=ITEM[el.dataset.id]; el.classList.toggle('poor', it.cost>gold); } }
 function updateHUD() {
   const t=Math.floor(game.t); $('timeStat').textContent = String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');
   $('goldStat').textContent = '◆ '+gold;
@@ -886,52 +912,62 @@ let gesture = null, ghostPos = null, dragItem = null, lastPan = 0, pinch = null;
 function pinchState(){ const ps=[...pointers.values()], a=ps[0], b=ps[1]||ps[0]; return { x:(a.x+b.x)/2, y:(a.y+b.y)/2, d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)) }; }
 function toWorld(cx, cy){ return { x: cam.x + cx*dpr/scale, y: cam.y + cy*dpr/scale }; }
 function ghost() {
-  if (state!=='play' || !ghostPos) return null;
-  const id = dragItem ? dragItem.id : (ITEM[tool].kind==='stamp' ? tool : null);
-  if (!id || (dragItem && !dragItem.active)) return null;
-  return stampFor(id, ghostPos.x, ghostPos.y);
+  if (state!=='play' || !ghostPos || !dragItem || !dragItem.active) return null;
+  return stampFor(dragItem.id, ghostPos.x, ghostPos.y);
 }
+function canDigNear(w) {
+  const R=3.2;
+  for (let y=Math.floor(w.y-R); y<=w.y+R; y++) for (let x=Math.floor(w.x-R); x<=w.x+R; x++) {
+    if (!inB(x,y) || (x+.5-w.x)**2+(y+.5-w.y)**2 > R*R) continue;
+    const i=y*W+x; if (!DIGT[g[i]]) continue;
+    if ((x>0&&!SOLID[g[i-1]]) || (x<W-1&&!SOLID[g[i+1]]) || (y>0&&!SOLID[g[i-W]]) || (y<H-1&&!SOLID[g[i+W]])) return true;
+  }
+  return false;
+}
+const trayTop = () => innerHeight - $('tray').offsetHeight;
 function ghostFrom(e){ const off = e.pointerType==='touch' ? 44 : 0; return toWorld(e.clientX, e.clientY - off); }
 cv.addEventListener('pointerdown', e => {
   if (state!=='play') return;
   sfx.init();
   pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
-  cam.vy = 0;
-  if (pointers.size>=2) { gesture='pan2'; digAt=null; ghostPos=null; pinch=pinchState(); return; }
-  const kind = ITEM[tool].kind;
-  if (tool==='pan') gesture='pan';
-  else if (tool==='dig') { gesture='dig'; digAt=toWorld(e.clientX,e.clientY); }
-  else if (kind==='stamp') { gesture='stamp'; ghostPos=ghostFrom(e); }
+  cam.vy = 0; cam.vx = 0;
+  if (pointers.size>=2) { gesture='pan2'; digAt=null; pinch=pinchState(); return; }
+  const w = toWorld(e.clientX,e.clientY);
+  if (canDigNear(w)) { gesture='dig'; digAt=w; } else gesture='pan';
 });
 addEventListener('pointermove', e => {
-  if (dragItem) { if (dragItem.noDrag) return; const dy = dragItem.sy - e.clientY; if (!dragItem.active && dy>6 && dy>Math.abs(e.clientX-dragItem.sx)*.6) dragItem.active=true; if (dragItem.active) { ghostPos=ghostFrom(e); dragItem.cy=e.clientY; } return; }
+  if (dragItem) {
+    if (dragItem.noDrag || e.pointerId!==dragItem.pid) return;
+    if (!dragItem.active && Math.hypot(e.clientX-dragItem.sx, e.clientY-dragItem.sy) > 5) dragItem.active=true;
+    if (dragItem.active) ghostPos = e.clientY < trayTop()-4 ? ghostFrom(e) : null;
+    return;
+  }
   const p = pointers.get(e.pointerId); if (!p) return;
   const dx = (e.clientX - p.x)*dpr/scale, dy = (e.clientY - p.y)*dpr/scale; p.x=e.clientX; p.y=e.clientY;
   if (gesture==='pan') { cam.x -= dx; cam.y -= dy; cam.vx = -dx; cam.vy = -dy; lastPan=performance.now(); clampCam(); }
   else if (gesture==='pan2') {
     if (pointers.size<2) { pinch=null; return; }
     const n = pinchState();
-    if (pinch) { const wx=cam.x+pinch.x*dpr/scale, wy=cam.y+pinch.y*dpr/scale; cam.zoom=Math.max(1,Math.min(3.5,cam.zoom*n.d/pinch.d)); scale=cv.width/W*cam.zoom; cam.x=wx-n.x*dpr/scale; cam.y=wy-n.y*dpr/scale; clampCam(); }
+    if (pinch) { const wx=cam.x+pinch.x*dpr/scale, wy=cam.y+pinch.y*dpr/scale; cam.zoom=Math.max(ZMIN,Math.min(3.5,cam.zoom*n.d/pinch.d)); scale=cv.width/VIEWW*cam.zoom; cam.x=wx-n.x*dpr/scale; cam.y=wy-n.y*dpr/scale; clampCam(); }
     pinch = n;
   }
   else if (gesture==='dig') digAt = toWorld(e.clientX,e.clientY);
-  else if (gesture==='stamp') ghostPos = ghostFrom(e);
 });
 function endPointer(e) {
   if (dragItem) {
-    if (dragItem.active && e.type==='pointerup') { const trayTop = innerHeight - $('tray').offsetHeight; if (e.clientY < trayTop && ghostPos) place(dragItem.id, ghostPos.x, ghostPos.y); }
-    else { const it=ITEM[dragItem.id]; if (it.kind==='action') doAction(it.id); else if (it.kind==='stamp') toast(`Drag ${it.name} up out of the tray to place it`); else { tool = (tool===it.id && it.id!=='pan') ? 'pan' : it.id; if (it.id==='dig') toast('DIG: drag through earth. Two fingers scroll & pinch-zoom.'); } refreshTray(); }
+    if (e.pointerId!==dragItem.pid) return;
+    if (dragItem.active) { if (e.type==='pointerup' && ghostPos) place(dragItem.id, ghostPos.x, ghostPos.y); }
+    else if (e.type==='pointerup') { const it=ITEM[dragItem.id]; if (it.kind==='action') doAction(it.id); else toast(`Drag ${it.name} out of the tray and drop it`); }
     dragItem=null; ghostPos=null; return;
   }
   if (!pointers.has(e.pointerId)) return;
   pointers.delete(e.pointerId); pinch=null;
-  if (gesture==='stamp' && pointers.size===0 && ghostPos && e.type==='pointerup') place(tool, ghostPos.x, ghostPos.y);
-  if (pointers.size===0) { if (performance.now()-lastPan>80) { cam.vy=0; cam.vx=0; } gesture=null; digAt=null; ghostPos=null; }
+  if (pointers.size===0) { if (performance.now()-lastPan>80) { cam.vy=0; cam.vx=0; } gesture=null; digAt=null; }
 }
 addEventListener('pointerup', endPointer); addEventListener('pointercancel', endPointer);
-$('tray').addEventListener('pointerdown', e => { const el=e.target.closest('.item'); if (!el || state!=='play') return; sfx.init(); dragItem={ id:el.dataset.id, sx:e.clientX, sy:e.clientY, active:false }; if (ITEM[el.dataset.id].kind!=='stamp') dragItem.noDrag=true; });
+$('tray').addEventListener('pointerdown', e => { const el=e.target.closest('.item'); if (!el || state!=='play') return; e.preventDefault(); if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); sfx.init(); dragItem={ id:el.dataset.id, pid:e.pointerId, sx:e.clientX, sy:e.clientY, active:false }; if (ITEM[el.dataset.id].kind!=='stamp') dragItem.noDrag=true; });
 cv.addEventListener('wheel', e => { if (state!=='play') return; e.preventDefault(); if (e.ctrlKey) zoomAt(cam.zoom*Math.exp(-e.deltaY*.01), e.clientX, e.clientY); else { cam.x += e.deltaX*dpr/scale*.5; cam.y += e.deltaY*dpr/scale*.5; clampCam(); } }, {passive:false});
-document.addEventListener('touchmove', e => { if ((dragItem && dragItem.active) || !e.target.closest('#tray,.card')) e.preventDefault(); }, {passive:false});
+document.addEventListener('touchmove', e => { if (!e.target.closest('.card')) e.preventDefault(); }, {passive:false});
 document.addEventListener('gesturestart', e => e.preventDefault());
 mini.addEventListener('pointerdown', e => { const r=mini.getBoundingClientRect(); const jump = ev => { cam.y = (ev.clientY-r.top)/r.height*H - viewRows()/2; cam.vy=0; clampCam(); }; jump(e); const mv=ev=>jump(ev), up=()=>{removeEventListener('pointermove',mv); removeEventListener('pointerup',up);}; addEventListener('pointermove',mv); addEventListener('pointerup',up); e.stopPropagation(); });
 addEventListener('keydown', e => { if (e.key==='Escape' && state==='play') pause(); if (e.key==='Escape' && state==='paused') resume(); });
@@ -939,7 +975,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 
 // ---------- game flow
 function show(id, on){ $(id).hidden = !on; }
-function resetEntities(){ pumps=[]; mgs=[]; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
+function resetEntities(){ pumps=[]; mgs=[]; depots=[]; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
 function startDemo() {
   demo = true; state='menu'; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(true);
@@ -952,15 +988,16 @@ function startGame() {
   genWorld((Math.random()*1e9)|0); buildBase(false);
   Object.assign(game, { t:0, mined:0, kills:0, nextEvent:22, harassAt:40, intensity:1, events:0 });
   ITEM.fortify.cost = 120;
-  gold = 140; tool='pan'; state='play';
+  gold = 140; ITEM.depot.cost = 50; state='play';
   ['menu','help','over','pause'].forEach(s=>show(s,false)); show('hud',true); show('tray',true); show('mini',true);
   cam.zoom=1; cam.x=0; buildTray(); resize();
-  cam.y = 0; cam.vy=0; clampCam();
+  cam.y = 0; cam.vy=0; cam.x = hq.x+hq.w/2 - cv.width/scale/2; clampCam();
   const tips = [
-    [1,'Drag to scroll down to your COMMAND POST. Pinch to zoom.'],
-    [7,'Tap DIG and drag to tunnel. Gold ore (bright) pays ◆.'],
+    [1,'Drag open ground to scroll down to your COMMAND POST. Pinch to zoom.'],
+    [7,'Touch earth beside a tunnel and drag to dig. Bright gold ore pays ◆.'],
     [14,'Unbraced ceilings crumble. Drag a PROP from the tray into a tunnel.'],
-    [21,'Shells incoming soon. Earth, BAGS and CONCRETE absorb blasts.'],
+    [19,'DEPOTs earn ◆ over time — more near the surface, where the shells land.'],
+    [26,'Earth, BAGS and CONCRETE absorb blasts.'],
   ];
   for (const [t,msg] of tips) schedule(t, ()=>toast(msg));
 }
@@ -1025,11 +1062,10 @@ function frame(now) {
   if (state==='play'||state==='menu'||state==='dying') {
     acc += dt; let n=0; while (acc >= 1/60 && n<3) { update(); acc -= 1/60; n++; } if (n===3) acc=0;
   }
-  if (state==='menu') { const tgt = Math.max(-10, (hq.y - viewRows()*.55) * (.5 - .5*Math.cos((tick-demoStart)/700))); cam.y += (tgt-cam.y)*.02; }
+  if (state==='menu') { cam.x = Math.max(0, hq.x+hq.w/2 - cv.width/scale/2); const tgt = Math.max(-10, (hq.y - viewRows()*.55) * (.5 - .5*Math.cos((tick-demoStart)/700))); cam.y += (tgt-cam.y)*.02; }
   else if (state==='play' && pointers.size===0) { cam.y += cam.vy; cam.x += cam.vx; cam.vy *= .92; cam.vx *= .92; if (Math.abs(cam.vy)<.01) cam.vy=0; if (Math.abs(cam.vx)<.01) cam.vx=0;
-    if (dragItem && dragItem.active) { const ty=innerHeight-$('tray').offsetHeight; if (dragItem.cy < 110) cam.y -= 1.2; else if (dragItem.cy > ty-40) cam.y += 1.2; }
     clampCam(); }
-  if (gesture==='dig' || gesture==='stamp') { const p=[...pointers.values()][0]; if (p) { const ty=innerHeight-$('tray').offsetHeight; if (p.y < 100) cam.y -= .8; else if (p.y > ty-30) cam.y += .8; clampCam(); if (gesture==='dig') digAt=toWorld(p.x,p.y); } }
+  if (gesture==='dig') { const p=[...pointers.values()][0]; if (p) digAt=toWorld(p.x,p.y); }
   render();
   if (state==='play') { updateHUD(); if (++frameN % 12 === 0) renderMini(); }
 }
