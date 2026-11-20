@@ -95,8 +95,8 @@
     <p><em>GENERATORs</em> earn ◆. Shallow ones pay most but sit under the shells; none work below the dashed line.</p>
     <p><em>DRILL</em>: tap it to bore 20 cells straight down for ◆10, mining any ore it passes.</p>
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
-    <p><em>Sand</em> pours. <em>Water</em> floods. <em>BAGS</em> and <em>CONCRETE</em> soak up shellfire.</p>
-    <p><em>PUMP</em> drains floods. <em>LAMP</em> lights the dark. <em>MG NEST</em> cuts down raiders.</p>
+    <p><em>Sand</em> pours. <em>Water</em> floods. <em>BAGS</em> and <em>CONCRETE</em> soak up shellfire. Drag <em>CONCRETE</em> out and draw with it.</p>
+    <p><em>PUMP</em> drains floods. <em>MG NEST</em> cuts down raiders.</p>
     <p>Drag items up out of the tray to place them. <em>Pinch</em> to zoom.</p>
     <p>Lose every <em>GENERATOR</em> and the line falls. Survive as long as you can.</p>
   </div>
@@ -329,8 +329,7 @@ function updateDrills() {
 const ITEMS = [
   { id:'prop',     name:'PROP',    cost:10,  kind:'stamp' },
   { id:'bags',     name:'BAGS',    cost:8,   kind:'stamp' },
-  { id:'concrete', name:'CONCRETE',cost:25,  kind:'stamp' },
-  { id:'lamp',     name:'LAMP',    cost:4,   kind:'stamp' },
+  { id:'concrete', name:'CONCRETE',cost:1,   kind:'draw' },
   { id:'pump',     name:'PUMP',    cost:40,  kind:'stamp' },
   { id:'mg',       name:'MG', cost:60,  kind:'stamp' },
   { id:'drill',    name:'DRILL',   cost:30,  kind:'stamp' },
@@ -355,6 +354,7 @@ function propCells(cx, cy) {
   const out=[];
   for (let x=L;x<=R;x++){ out.push([x,top,PROPBG]); out.push([x,top+1,PROPBG]); }
   for (let y=top+2;y<=bot;y++){ out.push([L,y,PROPBG]); out.push([R,y,PROPBG]); }
+  if (bot-top>=4) out.push([(L+R)>>1, top+2, LAMP]);   // every prop hangs a lamp from its beam
   return out;
 }
 function rectCells(cx,cy,w,h,t){ const out=[]; const x0=Math.round(cx-w/2), y0=Math.round(cy-h/2); for(let y=0;y<h;y++) for(let x=0;x<w;x++) out.push([x0+x,y0+y,t]); return out; }
@@ -742,7 +742,7 @@ function schedule(delay, fn){ timers.push({at: game.t + delay, fn}); }
 function banner(title, sub){ const b=document.getElementById('banner'); b.innerHTML = title + (sub?`<small>${sub}</small>`:''); b.style.opacity=1; clearTimeout(banner.t); banner.t=setTimeout(()=>b.style.opacity=0, 2800); }
 function pickX(){ const gn = gens.length ? gens[rand()*gens.length|0] : null; return gn && rand()<.7 ? Math.max(2,Math.min(W-3, gn.x+gn.w/2 + (rand()-.5)*56)) : 2+rand()*(W-4); }
 const EVENTS = [
-  { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); const n=6+Math.round(game.intensity*3); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); } },
+  { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); const n=8+Math.round(game.intensity*4); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); } },
   { id:'heavy',   w:2, after:80,  run(){ banner('HEAVY GUNS','DEEP PENETRATING SHELLS'); const n=2+Math.round(game.intensity); for(let k=0;k<n;k++) schedule(2.5+k*1.6+rand(), ()=>spawnShell('heavy', pickX())); } },
   { id:'rain',    w:2, after:45,  run(){ banner('STORM FRONT','FLOODING LIKELY — PUMPS READY'); rainUntil = game.t + 14 + game.intensity*3; sfx.rain(true); } },
   { id:'raid',    w:3, after:55,  run(){ banner('ENEMY RAID','INFANTRY ADVANCING'); const n=2+Math.round(game.intensity*1.6); for(let k=0;k<n;k++) schedule(2+k*1.4, ()=>spawnSoldier(rand()<.5?-1:1)); } },
@@ -757,7 +757,7 @@ function tremor() {
 function updateDirector() {
   game.intensity = 1 + game.t/75;
   for (let k=timers.length-1;k>=0;k--) if (game.t>=timers[k].at) { const f=timers[k].fn; timers.splice(k,1); f(); }
-  if (game.t >= game.harassAt) { spawnShell(game.t>200 && rand()<.3 ? 'howitzer':'light', pickX()); game.harassAt = game.t + Math.max(1.6, 8 - game.t/35)*(.6+rand()*.8); }
+  if (game.t >= game.harassAt) { spawnShell(game.t>200 && rand()<.3 ? 'howitzer':'light', pickX()); game.harassAt = game.t + Math.max(1.1, 6 - game.t/35)*(.6+rand()*.8); }
   if (game.t >= game.nextEvent) {
     const pool = EVENTS.filter(e=>game.t>=e.after);
     let tw = pool.reduce((a,e)=>a+e.w,0), r=rand()*tw, ev=pool[0];
@@ -818,7 +818,7 @@ function render() {
   // light sources
   let fires=0;
   for (let y=Math.max(0,y0-14); y<Math.min(H,y0+rows+14); y++) for (let x=0;x<W;x++) { const t=g[y*W+x];
-    if (t===LAMP) addLight(x+.5,y+.5,17,1.1,y0,rows);
+    if (t===LAMP) addLight(x+.5,y+.5,13,.6,y0,rows);
     else if (t===FIRE && fires<160 && ((x+y)&1)===0) { fires++; addLight(x+.5,y+.5,6,.35+rand()*.15,y0,rows); } }
   for (const gn of gens) addLight(gn.x+gn.w/2, gn.y+3, 20, .9, y0, rows);
   for (const f of flashes) addLight(f.x,f.y,f.r,1.8*f.life/f.max,y0,rows);
@@ -928,6 +928,7 @@ function drawEntities(s) {
   for (const p of popups) { ctx.fillStyle=`rgba(240,200,80,${p.life/60})`; ctx.fillText(p.txt, p.x*s, p.y*s); }
   // ghost
   const gh = ghost();
+  if (dragItem && dragItem.active && dragItem.id==='concrete' && ghostPos) { ctx.strokeStyle='#e8d6a0cc'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.arc(ghostPos.x*s,ghostPos.y*s,PAINT_R*s,0,6.29); ctx.stroke(); }
   if (gh && !gh.cells.length && ghostPos) { ctx.strokeStyle='rgba(220,80,60,.8)'; ctx.lineWidth=Math.max(1,dpr); const gx=Math.floor(ghostPos.x)*s, gy=Math.floor(ghostPos.y)*s; ctx.strokeRect(gx-4*s,gy-4*s,9*s,9*s); ctx.beginPath(); ctx.moveTo(gx-4*s,gy-4*s); ctx.lineTo(gx+5*s,gy+5*s); ctx.moveTo(gx+5*s,gy-4*s); ctx.lineTo(gx-4*s,gy+5*s); ctx.stroke(); }
   if (gh) for (const c of gh.cells) { ctx.fillStyle = !c.ok ? 'rgba(200,60,40,.35)' : gh.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); }
   if (gh && dragItem && dragItem.id==='gen' && ghostPos) {
@@ -1021,7 +1022,7 @@ function buildTray() {
     const el=document.createElement('div'); el.className='item'; el.dataset.id=it.id;
     const ic=document.createElement('canvas'); ic.width=16; ic.height=12; drawIcon(ic,it.id);
     el.append(ic); const b=document.createElement('b'); b.textContent=it.name; el.append(b);
-    const i=document.createElement('i'); i.textContent = '◆'+it.cost; el.append(i);
+    const i=document.createElement('i'); i.textContent = it.kind==='draw' ? '◆½/px' : '◆'+it.cost; el.append(i);
     tray.append(el);
   }
 }
@@ -1041,8 +1042,23 @@ const pointers = new Map();
 let drillTap = null, pendingAt = 0, gesture = null, ghostPos = null, dragItem = null, lastPan = 0, pinch = null;
 function pinchState(){ const ps=[...pointers.values()], a=ps[0], b=ps[1]||ps[0]; return { x:(a.x+b.x)/2, y:(a.y+b.y)/2, d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)) }; }
 function toWorld(cx, cy){ return { x: cam.x + cx*dpr/scale, y: cam.y + cy*dpr/scale }; }
+const PAINT_R = 1.6, PAINT_COST = .5;   // ◆ per cell of drawn concrete
+let paintLast = null, paintAcc = 0, paintN = 0;
+function paintConcrete(p) {
+  const from = paintLast || p, n = Math.max(1, Math.ceil(Math.hypot(p.x-from.x, p.y-from.y)/.7));
+  for (let k=0;k<=n;k++) {
+    const cx = from.x+(p.x-from.x)*k/n, cy = from.y+(p.y-from.y)*k/n;
+    for (let y=Math.floor(cy-PAINT_R); y<=cy+PAINT_R; y++) for (let x=Math.floor(cx-PAINT_R); x<=cx+PAINT_R; x++) {
+      if (!free(x,y) || (x+.5-cx)**2+(y+.5-cy)**2 > PAINT_R*PAINT_R) continue;
+      if (paintAcc + PAINT_COST >= 1 && gold < 1) { if (!paintConcrete.warned) { paintConcrete.warned=true; toast('Out of gold'); sfx.deny(); } paintLast=p; return; }
+      paintAcc += PAINT_COST; if (paintAcc >= 1) { paintAcc -= 1; gold -= 1; }
+      setCell(x,y,CONC); if (++paintN % 8 === 0) sfx.dig();
+    }
+  }
+  paintLast = p;
+}
 function ghost() {
-  if (state!=='play' || !ghostPos || !dragItem || !dragItem.active) return null;
+  if (state!=='play' || !ghostPos || !dragItem || !dragItem.active || dragItem.id==='concrete') return null;
   return stampFor(dragItem.id, ghostPos.x, ghostPos.y);
 }
 function canDigNear(w) {
@@ -1070,7 +1086,7 @@ addEventListener('pointermove', e => {
   if (dragItem) {
     if (dragItem.noDrag || e.pointerId!==dragItem.pid) return;
     if (!dragItem.active && Math.hypot(e.clientX-dragItem.sx, e.clientY-dragItem.sy) > 5) dragItem.active=true;
-    if (dragItem.active) ghostPos = e.clientY < trayTop()-4 ? ghostFrom(e) : null;
+    if (dragItem.active) { ghostPos = e.clientY < trayTop()-4 ? ghostFrom(e) : null; if (dragItem.id==='concrete') { if (ghostPos) paintConcrete(ghostPos); else paintLast=null; } }
     return;
   }
   const p = pointers.get(e.pointerId); if (!p) return;
@@ -1087,8 +1103,8 @@ addEventListener('pointermove', e => {
 function endPointer(e) {
   if (dragItem) {
     if (e.pointerId!==dragItem.pid) return;
-    if (dragItem.active) { if (e.type==='pointerup' && ghostPos) place(dragItem.id, ghostPos.x, ghostPos.y); }
-    else if (e.type==='pointerup') { const it=ITEM[dragItem.id]; if (it.kind==='action') doAction(it.id); else toast(`Drag ${it.name} out of the tray and drop it`); }
+    if (dragItem.active) { if (dragItem.id==='concrete') { paintLast=null; paintConcrete.warned=false; if (paintN) haptic('light'); paintN=0; } else if (e.type==='pointerup' && ghostPos) place(dragItem.id, ghostPos.x, ghostPos.y); }
+    else if (e.type==='pointerup') { const it=ITEM[dragItem.id]; if (it.kind==='action') doAction(it.id); else toast(it.kind==='draw' ? 'Drag CONCRETE out of the tray and draw walls with it' : `Drag ${it.name} out of the tray and drop it`); }
     dragItem=null; ghostPos=null; return;
   }
   if (!pointers.has(e.pointerId)) return;
@@ -1097,7 +1113,7 @@ function endPointer(e) {
   if (pointers.size===0) { if (performance.now()-lastPan>80) { cam.vy=0; cam.vx=0; } gesture=null; digAt=null; }
 }
 addEventListener('pointerup', endPointer); addEventListener('pointercancel', endPointer);
-$('tray').addEventListener('pointerdown', e => { const el=e.target.closest('.item'); if (!el || state!=='play') return; e.preventDefault(); if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); sfx.init(); dragItem={ id:el.dataset.id, pid:e.pointerId, sx:e.clientX, sy:e.clientY, active:false }; if (ITEM[el.dataset.id].kind!=='stamp') dragItem.noDrag=true; });
+$('tray').addEventListener('pointerdown', e => { const el=e.target.closest('.item'); if (!el || state!=='play') return; e.preventDefault(); if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); sfx.init(); dragItem={ id:el.dataset.id, pid:e.pointerId, sx:e.clientX, sy:e.clientY, active:false }; if (ITEM[el.dataset.id].kind==='action') dragItem.noDrag=true; });
 cv.addEventListener('wheel', e => { if (state!=='play') return; e.preventDefault(); if (e.ctrlKey) zoomAt(cam.zoom*Math.exp(-e.deltaY*.01), e.clientX, e.clientY); else { cam.x += e.deltaX*dpr/scale*.5; cam.y += e.deltaY*dpr/scale*.5; clampCam(); } }, {passive:false});
 document.addEventListener('touchmove', e => { if (!e.target.closest('.card')) e.preventDefault(); }, {passive:false});
 document.addEventListener('gesturestart', e => e.preventDefault());
@@ -1118,7 +1134,7 @@ function startGame() {
   sfx.init(); sfx.rain(false);
   demo = false; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(false);
-  Object.assign(game, { t:0, mined:0, kills:0, nextEvent:22, harassAt:40, intensity:1, events:0 });
+  Object.assign(game, { t:0, mined:0, kills:0, nextEvent:22, harassAt:30, intensity:1, events:0 });
   gold = 140; ITEM.gen.cost = 150; state='play';
   ['menu','help','over','pause'].forEach(s=>show(s,false)); show('hud',true); show('tray',true); show('mini',true);
   cam.zoom=1; cam.x=0; buildTray(); resize();
