@@ -93,6 +93,8 @@
     <p><em>One finger digs</em>: drag through earth beside any tunnel. Rock is slow. Gold ore pays ◆.</p>
     <p>Wide caverns cave in. Undercut a rock and it drops in one piece.</p>
     <p><em>GENERATORs</em> earn ◆. Shallow ones pay most but sit under the shells; none work below the dashed line.</p>
+    <p>Tap a <em>GENERATOR</em> to overcharge it: double output for 20s, but sparks start fires that burn props.</p>
+    <p>Gold ore is worth ◆4 near the top, up to ◆10 deep down, with rare ◆25 nuggets.</p>
     <p><em>DRILL</em>: tap it to bore 20 cells straight down for ◆10, mining any ore it passes.</p>
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>BAGS</em> and <em>CONCRETE</em> soak up shellfire. Drag <em>CONCRETE</em> out and draw with it.</p>
@@ -263,7 +265,13 @@ function buildBase(isDemo) {
 const GEN_W = 14, GEN_H = 7, GEN_MAX = 110;
 function genRate(x,y){ const d=Math.max(0, y - surfOrig[Math.max(0,Math.min(W-1,x|0))]); return d>GEN_MAX ? 0 : 2*(1-d/140); }
 function genAt(x,y){ for (const gn of gens) if (x>=gn.x && x<gn.x+gn.w && y>=gn.y && y<gn.y+gn.h) return gn; return null; }
-function addGen(x,y){ const gn={ x, y, w:GEN_W, h:GEN_H, hp:100, max:100, acc:0, n:0, hit:0, rate:genRate(x+GEN_W/2, y+GEN_H) }; gens.push(gn); return gn; }
+function addGen(x,y){ const gn={ x, y, w:GEN_W, h:GEN_H, hp:100, max:100, acc:0, n:0, hit:0, oc:0, cool:0, rate:genRate(x+GEN_W/2, y+GEN_H) }; gens.push(gn); return gn; }
+const OC_TIME = 20*60, OC_COOL = 30*60;
+function overcharge(gn) {
+  if (gn.oc) return;
+  if (gn.cool) { toast(`Still cooling — ${Math.ceil(gn.cool/60)}s`); sfx.deny(); return; }
+  gn.oc = OC_TIME; sfx.thunk(); haptic('medium'); toast('OVERCHARGED: double output for 20s — watch for fires');
+}
 function hurtGen(gn, dmg){ if (!gn) return; gn.hp -= dmg; gn.hit = 10; }
 function nearestGen(x,y){ let best=null, bd=1e9; for (const gn of gens){ const d=Math.abs(gn.x+gn.w/2-x)+Math.abs(gn.y+gn.h/2-y)*.5; if (d<bd){bd=d;best=gn;} } return best; }
 function updateGens() {
@@ -272,7 +280,14 @@ function updateGens() {
     if (state==='menu') { gn.hp=gn.max; continue; }
     if (gn.hp<=0) { destroyGen(gn); continue; }
     if (state!=='play') continue;
-    gn.acc += gn.rate/60;
+    if (gn.oc>0) {
+      // overcharged: double output, but it runs hot — sparks start fires around it and it wears itself down
+      if (--gn.oc===0) { gn.cool = OC_COOL; toast('Generator back to normal — cooling down'); }
+      gn.hp -= .01;
+      if (rand() < .06) { const x = gn.x-1 + (rand()*(gn.w+2)|0), y = gn.y-2 + (rand()*(gn.h+2)|0); if (inB(x,y) && g[y*W+x]===E) { g[y*W+x]=FIRE; hp[y*W+x]=50+(rand()*60|0); } }
+      if (rand() < .3) particles.push({x:gn.x+rand()*gn.w, y:gn.y, vx:(rand()-.5)*.4, vy:-.3-rand()*.3, life:25, max:25, k:'spark'});
+    } else if (gn.cool>0) gn.cool--;
+    gn.acc += gn.rate*(gn.oc?2:1)/60;
     if (gn.acc>=1) { gn.acc-=1; gold+=1; if (++gn.n%5===0) popup(gn.x+gn.w/2, gn.y-1, '+◆'); }
     if (tick%30===0) {
       let wet=0; for (let y=gn.y-1;y<=gn.y+gn.h;y++) for (let x=gn.x-1;x<=gn.x+gn.w;x++) if (inB(x,y) && g[y*W+x]===WATER) wet++;
@@ -286,6 +301,15 @@ function destroyGen(gn) {
   explode(gn.x+gn.w/2, gn.y+3, 12, {fire:1});
   haptic('error');
   if (state==='play') { if (gens.length) toast(`Generator lost! ${gens.length} left — build another`); else gameOver(); }
+}
+
+// ---------- ore: worth ◆4 near the surface rising to ◆10 deep down, with the odd big nugget
+function mineOre(x,y) {
+  const d = Math.max(0, y - surfOrig[x]);
+  let v = Math.round(4 + 6*Math.min(1, d/250));
+  if (rand() < .03) { v = 25; popup(x,y,'NUGGET +25'); sfx.coin(); sfx.coin(); }
+  else if (rand() < .3) popup(x,y,'+'+v);
+  gold += v; game.mined += v; sfx.coin();
 }
 
 // ---------- drills: tap to bore a 3-wide shaft straight down
@@ -310,7 +334,7 @@ function updateDrills() {
     d.work=0;
     for (let c=0;c<DRILL_W;c++) {
       const i=by*W+d.x+c;
-      if (g[i]===GOLD) { gold+=2; game.mined+=2; popup(d.x+c,by,'+◆'); sfx.coin(); }
+      if (g[i]===GOLD) mineOre(d.x+c,by);
       g[i]=DRILL; hp[i]=0; prop[i]=0; g[d.y*W+d.x+c]=E;
       if (rand()<.4) particles.push({x:d.x+c+.5,y:by,vx:(rand()-.5)*.5,vy:-.3-rand()*.3,life:25,max:25,k:'spark',dirt:1});
     }
@@ -730,7 +754,7 @@ function applyDig() {
     if (!((x>0&&!SOLID[g[i-1]]) || (x<W-1&&!SOLID[g[i+1]]) || (y>0&&!SOLID[g[i-W]]) || (y<H-1&&!SOLID[g[i+W]]))) continue;
     if (++hp[i] >= need) {
       g[i]=E; hp[i]=0; any=true; if (tick%6===0 || isRock(t)) queueRockCheck(x,y,4);
-      if (t===GOLD) { gold+=2; game.mined+=2; if (rand()<.4) popup(x,y,'+◆'); sfx.coin(); }
+      if (t===GOLD) mineOre(x,y);
       if (rand()<.25) particles.push({x:x+.5,y:y+.5,vx:(rand()-.5)*.3,vy:-rand()*.3,life:20,max:20,k:'spark',dirt:1});
     }
   }
@@ -886,7 +910,10 @@ function drawEntities(s) {
     const a=tick*.15, cx=x+5, cy=y+3.5; px(cx-2,cy-2,5,5,'#232822');
     for (let k=0;k<4;k++) px(cx+Math.cos(a+k*1.57)*1.6, cy+Math.sin(a+k*1.57)*1.6, 1, 1, '#a9b39a');
     for (let k=0;k<3;k++) px(x+9+k*1.5,y+2,1,1, (tick>>4)%3===k ? '#ffe9a8' : '#7a6a3a');
-    px(x+9,y+4,4,1, gn.hp/gn.max<.35 ? ((tick>>3)&1?'#e04a30':'#5a1a10') : '#6f8a4a');
+    px(x+9,y+4,4,1, gn.oc ? ((tick>>2)&1?'#ffb040':'#ff6020') : gn.hp/gn.max<.35 ? ((tick>>3)&1?'#e04a30':'#5a1a10') : '#6f8a4a');
+    if (state==='play') { ctx.textAlign='center'; ctx.font=`bold ${Math.round(Math.max(9*dpr,s*2.2))}px ui-monospace,Menlo,monospace`;
+      const t = gn.oc ? `⚡ ${Math.ceil(gn.oc/60)}s` : gn.cool ? `COOLING ${Math.ceil(gn.cool/60)}s` : 'TAP ⚡ OVERCHARGE';
+      ctx.fillStyle='#000a'; ctx.fillText(t,(x+w/2)*s+1,(y-5)*s+1); ctx.fillStyle = gn.oc ? '#ffb040' : gn.cool ? '#8a8a80' : '#f0d68a'; ctx.fillText(t,(x+w/2)*s,(y-5)*s); }
     px(x+w-3,y-4,2,4,'#2a2420');
     if (state!=='over' && tick%9===0) particles.push({x:x+w-2,y:y-4,vx:.02,vy:-.06,life:120,max:120,k:'smoke'});
     if (gn.hit>0) gn.hit--;
@@ -1033,7 +1060,7 @@ function updateHUD() {
   $('goldStat').textContent = '◆ '+gold;
   const tot=gens.reduce((a,gn)=>a+Math.max(0,gn.hp),0), mx=gens.reduce((a,gn)=>a+gn.max,0)||1, weak=gens.reduce((a,gn)=>Math.min(a,gn.hp/gn.max),1);
   $('hqFill').style.width=(tot/mx*100)+'%'; $('hqBar').classList.toggle('hurt', weak<.35);
-  const rate=gens.reduce((a,gn)=>a+gn.rate,0)*60;
+  const rate=gens.reduce((a,gn)=>a+gn.rate*(gn.oc?2:1),0)*60;
   $('hqText').textContent = `GEN ×${gens.length} · +${Math.round(rate)}◆/MIN`;
   refreshTray();
 }
@@ -1081,6 +1108,7 @@ cv.addEventListener('pointerdown', e => {
   if (pointers.size>=2) { gesture='pan2'; digAt=null; drawAt=null; paintLast=null; pinch=pinchState(); return; }
   const w = toWorld(e.clientX,e.clientY);
   const dr = drillAt(w); if (dr) { gesture='drill'; drillTap={ d:dr, sx:e.clientX, sy:e.clientY }; return; }
+  const gt = genAt(Math.floor(w.x), Math.floor(w.y)); if (gt) { gesture='gen'; drillTap={ gn:gt, sx:e.clientX, sy:e.clientY }; return; }
   gesture='pending'; pendingAt=performance.now();   // becomes a dig unless a second finger lands quickly
 });
 addEventListener('pointermove', e => {
@@ -1110,7 +1138,7 @@ function endPointer(e) {
     dragItem=null; ghostPos=null; return;
   }
   if (!pointers.has(e.pointerId)) return;
-  if (gesture==='drill' && pointers.size===1 && e.type==='pointerup' && drillTap) { const p=pointers.get(e.pointerId); if (Math.hypot(p.x-drillTap.sx,p.y-drillTap.sy)<16) pressDrill(drillTap.d); }
+  if ((gesture==='drill'||gesture==='gen') && pointers.size===1 && e.type==='pointerup' && drillTap) { const p=pointers.get(e.pointerId); if (Math.hypot(p.x-drillTap.sx,p.y-drillTap.sy)<16) { if (drillTap.d) pressDrill(drillTap.d); else overcharge(drillTap.gn); } }
   pointers.delete(e.pointerId); pinch=null;
   if (gesture==='draw') { paintLast=null; paintConcrete.warned=false; drawAt=null; if (paintN) haptic('light'); paintN=0; }
   if (pointers.size===0) { if (performance.now()-lastPan>80) { cam.vy=0; cam.vx=0; } gesture=null; digAt=null; }
@@ -1146,7 +1174,8 @@ function startGame() {
     [1,'Two fingers scroll & pinch. Your GENERATOR earns ◆ — keep it running.'],
     [7,'One finger digs — drag through earth beside a tunnel. Gold ore pays ◆.'],
     [14,'Unbraced ceilings crumble. Drag a PROP from the tray into a tunnel.'],
-    [13,'Tap a DRILL to bore 20 deeper for ◆10. It mines any ore it passes.'],
+    [13,'Tap a DRILL to bore 20 deeper for ◆10. Ore is worth more the deeper it is.'],
+    [33,'Tap a GENERATOR to overcharge it: double ◆ for 20s, but it sparks fires.'],
     [20,'More GENERATORs = more ◆. Shallow pays best, but that is where shells land.'],
     [26,'Earth, BAGS and CONCRETE absorb blasts.'],
   ];
