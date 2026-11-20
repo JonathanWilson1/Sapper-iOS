@@ -770,7 +770,24 @@ function applyDig() {
 // ---------- director: events over time
 function schedule(delay, fn){ timers.push({at: game.t + delay, fn}); }
 function banner(title, sub){ const b=document.getElementById('banner'); b.innerHTML = title + (sub?`<small>${sub}</small>`:''); b.style.opacity=1; clearTimeout(banner.t); banner.t=setTimeout(()=>b.style.opacity=0, 2800); }
-function pickX(){ const gn = gens.length ? gens[rand()*gens.length|0] : null; return gn && rand()<.7 ? Math.max(2,Math.min(W-3, gn.x+gn.w/2 + (rand()-.5)*56)) : 2+rand()*(W-4); }
+// shells only land over the player's works: columns weighted by structures and dug-out space beneath them
+let colW = null, colWTick = -1e9;
+function columnWeights() {
+  if (colW && tick-colWTick < 60) return colW;
+  const raw = new Float32Array(W);
+  for (let x=0;x<W;x++) { let n=0; for (let y=SKY;y<H;y++) { const i=y*W+x, t=g[i];
+    if (t===HQ) n+=3; else if (t===CONC||t===TIMBER||t===PUMP||t===MG||t===DRILL||t===LAMP||prop[i]) n+=1; else if (t===E && y>surfOrig[x]+2) n+=.5; }
+    raw[x]=n; }
+  colW = new Float32Array(W);
+  for (let x=0;x<W;x++) { let a=0; for (let k=-5;k<=5;k++) { const xx=x+k; if (xx>=0&&xx<W) a+=raw[xx]; } colW[x]=a; }   // spread a little either side
+  colWTick = tick; return colW;
+}
+function pickX() {
+  const w = columnWeights(); let tot=0; for (let x=0;x<W;x++) tot+=w[x];
+  if (tot<=0) return 2+rand()*(W-4);
+  let r = rand()*tot; for (let x=0;x<W;x++) { r-=w[x]; if (r<=0) return x+rand(); }
+  return W/2;
+}
 function maybeBuster() {
   let best=-1, bestN=0;
   const cnt=[]; for (let x=0;x<W;x++) { let n=0; for (let y=SKY;y<H;y++) if (g[y*W+x]===CONC) n++; cnt.push(n); if (n>bestN) bestN=n; }
@@ -808,8 +825,8 @@ function updateDirector() {
   if (rand()<.002) flares.push({x:10+rand()*(W-20), y:4+rand()*10, vx:(rand()-.5)*.03, life:900});
 }
 function rainTick(rate) {
-  for (let n=0;n<rate;n++) { const x=rand()*W|0; if (g[x]===E && rand()<.7) { g[x]=WATER; sh[x]=rand()*255|0; } }
-  if (particles.length<1400) for (let n=0;n<4;n++) particles.push({x:rand()*W, y:cam.y-2+rand()*4, vx:-.15, vy:2.2, life:200, max:200, k:'rain'});
+  for (let n=0;n<rate;n++) { const x=rand()*W|0; if (g[x]===E && rand()<.35) { g[x]=WATER; sh[x]=rand()*255|0; } }
+  if (particles.length<1400) for (let n=0;n<2;n++) particles.push({x:rand()*W, y:cam.y-2+rand()*4, vx:-.15, vy:2.2, life:200, max:200, k:'rain'});
 }
 function updateDemo() {
   game.intensity = 2;
