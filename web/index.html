@@ -597,6 +597,20 @@ function explode(x, y, r, opt={}) {
     if (t===HQ) { const gn=genAt(cx,cy); if (gn && e>(genHit.get(gn)||0)) genHit.set(gn,e); continue; }
     if (e<=0) { if (e>-2.5 && (t===SOIL||t===GRASS) && rand()<.5) g[i]=RUBBLE; continue; }
     if (t===E) { if (opt.fire && rand()<opt.fire*.06) { g[i]=FIRE; hp[i]=30+rand()*60|0; } continue; }
+    const soft = t===SOIL||t===GRASS||t===RUBBLE;
+    if (opt.shell && soft) {
+      // artillery on earth: a 20% smaller hole, and most of what it blows apart turns to loose sand — some of it thrown skyward
+      if (d > r*.8 || e <= 0) continue;
+      const k = rand();
+      if (k < .8) {
+        if (rand() < .3 && particles.length<1400) {
+          const a=Math.atan2(dy-2,dx)-.3+rand()*.6, sp=.35+e*.09*rand();
+          particles.push({x:cx+.5,y:cy+.5,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-.5,life:150,max:150,k:'debris',t:SAND});
+          g[i]=E;
+        } else { g[i]=SAND; sh[i]=rand()*255|0; }
+      } else g[i]=E;
+      hp[i]=0; continue;
+    }
     if (e > HARD[t]) {
       if ((t===SOIL||t===GRASS||t===SAND||t===RUBBLE||t===ROCK) && rand()<.10 && particles.length<1400) {
         const a=Math.atan2(dy-1.5,dx), sp=.25+e*.08*rand();
@@ -646,7 +660,7 @@ function updateShells() {
       if (SOLID[t]) {
         if (s.pen>0 && !s.breached && (t===SOIL||t===GRASS||t===SAND||t===RUBBLE)) { s.pen -= 1; s.vy*=.93; continue; }
         if (s.kind==='buster' && s.pen>0 && t!==BED && !(s.breached && t!==CONC)) { if (t===CONC) s.breached=true; s.pen -= Math.max(1, RES[t]); s.vy*=.95; continue; }   // punches through the slab, then goes off on whatever it was protecting
-        explode(s.x, s.y, s.r, { fire: isMet(s.kind) ? 1.5 : s.kind==='heavy'||s.kind==='buster' ? .3 : .12 });
+        explode(s.x, s.y, s.r, { fire: isMet(s.kind) ? 1.5 : s.kind==='heavy'||s.kind==='buster' ? .3 : .12, shell: !isMet(s.kind) });
         dead=true;
       } else if (soldiers.some(o=>Math.abs(o.x-s.x)<1.2 && s.y>o.y-4 && s.y<o.y+1)) { explode(s.x,s.y,s.r,{fire:.1}); dead=true; }
     }
