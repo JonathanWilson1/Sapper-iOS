@@ -599,9 +599,10 @@ function explode(x, y, r, opt={}) {
     if (t===E) { if (opt.fire && rand()<opt.fire*.06) { g[i]=FIRE; hp[i]=30+rand()*60|0; } continue; }
     const soft = t===SOIL||t===GRASS||t===RUBBLE;
     if (opt.shell && soft) {
-      // artillery on earth: a 20% smaller hole, and most of what it blows apart turns to loose sand — some of it thrown skyward
+      // artillery on earth: a 20% smaller hole; of it 40% stays ground, 40% turns to loose sand (some thrown skyward), 20% is gone
       if (d > r*.8 || e <= 0) continue;
       const k = rand();
+      if (k < .4) continue;          // half of what would have turned to sand just stays put as ground
       if (k < .8) {
         if (rand() < .3 && particles.length<1400) {
           const a=Math.atan2(dy-2,dx)-.3+rand()*.6, sp=.35+e*.09*rand();
