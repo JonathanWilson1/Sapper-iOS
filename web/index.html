@@ -1429,12 +1429,16 @@ function render() {
   if (!capThis) drawLoupe();
 }
 function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.floor(x*scale),Math.floor(y*scale),Math.ceil(w*scale),Math.ceil(h*scale)); }
+// dug-earth back wall, a shade darker than the tunnels: rooms are just widened bits of the tunnel system
+function earthWall(x0,y0,w,h,hurt) {
+  for (let y=y0;y<y0+h;y++) for (let x=x0;x<x0+w;x++) { const v = inB(x,y) ? (sh[y*W+x]&7) : 3, o=(v-3.5)*2.2;
+    ctx.fillStyle = hurt ? `rgb(${60+o|0},${26+o|0},${18+o|0})` : `rgb(${30+o|0},${21+o|0},${15+o|0})`; ctx.fillRect(x*scale,y*scale,Math.ceil(scale),Math.ceil(scale)); }
+}
 function drawEntities(s) {
   // generators: a timber-framed engine room with the dynamo inside
   for (const gn of gens) {
     const {x,y,w,h} = gn, fl=y+h-1, hurt = gn.hit>0;
-    px(x,y,w,h, hurt?'#4a2a20':'#2a2820');                                              // back wall
-    for (let k=0;k<w;k+=3) px(x+k,y+1,.3,h-2,'#24221c');                                // planking
+    earthWall(x,y,w,h,hurt);                                                             // bare earth behind it
     px(x,y,w,1,'#7a5531'); px(x,y,1,h,'#7a5531'); px(x+w-1,y,1,h,'#7a5531');            // timber frame
     px(x+1,y+1,.6,.6,'#5a3e22'); px(x+w-1.6,y+1,.6,.6,'#5a3e22');                       // braces
     px(x,fl,w,1,'#1c1712');                                                              // floor
@@ -1455,7 +1459,7 @@ function drawEntities(s) {
   // rooms: lit interiors with little people at work
   for (const r of rooms) {
     const {x,y,w,h} = r, fl = y+h-1;
-    px(x,y,w,h,'#2e271e'); px(x,y,w,1,'#4a3a26'); px(x,fl,w,1,'#1c1712'); px(x,y,1,h,'#3a2e1e'); px(x+w-1,y,1,h,'#3a2e1e');   // walls, beam, floor
+    earthWall(x,y,w,h,false); px(x,fl,w,1,'#1c1712');                                     // bare earth walls, trodden floor
     px(x+w/2,y+1,1,1,(tick>>5)%9?'#ffe196':'#c8a860');                                                                    // hanging lamp
     if (r.kind==='miners') { for (let k=0;k<2;k++) { px(x+2,y+2+k*2,5,.7,'#6a5032'); px(x+2,y+1.5+k*2,5,.5,'#a89a78'); } for (let k=0;k<3;k++) { px(x+w-3-k*1.6,y+2,.4,3,'#6a5030'); px(x+w-3.6-k*1.6,y+2,1.6,.5,'#b0b4b8'); } px(x+8,fl-1,2,1,'#4a4a50'); const crew=diggers.filter(d=>d.hut===r).length; for (let k=0;k<DIGGERS_PER_HUT;k++) px(x+8+k*1.1,y+1.4,.7,.7,k<crew?'#9fd07a':'#5a2a20'); continue; }
     if (!r.people) r.people = [0,1,2].map(k => ({ x: 2+k*5, dir: k%2?-1:1, wait: k*40, carry: false }));
