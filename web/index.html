@@ -1381,7 +1381,12 @@ async function shareScore() {
   try { if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.share) { window.webkit.messageHandlers.share.postMessage({ image:dataUrl, text:shareText }); return; } } catch(e) {}
   const file = shareBlob && new File([shareBlob], 'sapper-score.png', { type:'image/png' });
   try {
-    if (file && navigator.canShare && navigator.canShare({ files:[file] })) { await navigator.share({ files:[file], text:shareText }); return; }
+    // iOS hands apps like Signal only the text when a share has both, so share the image alone (it carries the link)
+    // and put the caption on the clipboard to paste alongside it
+    if (file && navigator.canShare && navigator.canShare({ files:[file] })) {
+      navigator.clipboard && navigator.clipboard.writeText(shareText).then(()=>toast('Caption copied — paste it with the image'), ()=>{});
+      await navigator.share({ files:[file] }); return;
+    }
     if (navigator.share) { await navigator.share({ text:shareText }); return; }
   } catch(e) { if (e && e.name==='AbortError') return; }
   const a=document.createElement('a'); a.href=dataUrl; a.download='sapper-score.png'; a.click();
