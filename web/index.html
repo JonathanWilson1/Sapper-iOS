@@ -123,7 +123,7 @@
     <p>Tap your <em>DRILL</em> to bore 20 cells straight down for ◆10, mining any ore it passes. The deep half of the map is rich in gold.</p>
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>CONCRETE</em> soaks up shellfire — tap it, then draw with one finger.</p>
-    <p>Generators, pumps and rooms come from the <em>ROOM</em> menu. Placing one marks a construction site; your miners build it, then board up the gap above it so tunnels stay neat. Rooms and pumps hold up the ceiling like props. Marked <em>concrete</em> can be dug out too.</p>
+    <p>Generators, pumps and rooms come from the <em>ROOM</em> menu. Place one in open space or straight into the earth — it snaps into line with its neighbours. Your miners dig out the site, build it, then board up the gap above it so tunnels stay neat. Rooms and pumps hold up the ceiling like props. Marked <em>concrete</em> can be dug out too.</p>
     <p><em>PUMP</em> drains floods. <em>MG NEST</em> cuts down raiders.</p>
     <p><em>ROOMS</em>: a <em>Field Hospital</em> slowly repairs nearby generators and sends a medic to carry wounded miners back for treatment (they bleed out after 45s otherwise), a <em>Mine Head</em> makes nearby ore pay 50% more, and a <em>Magazine</em> pays ◆40 every wave — but blows up if it's hit. A <em>Listening Post</em> hears enemy tunnellers.</p>
     <p><em>ENEMY TUNNELLERS</em> dig toward your generators to plant mines. Their tunnels are hidden — a listening post reveals them. Dig into one to stop it.</p>
@@ -509,8 +509,39 @@ function rectCells(cx,cy,w,h,t){ const out=[]; const x0=Math.round(cx-w/2), y0=M
 function dropRect(cx,cy,w,h,t){ let best=rectCells(cx,cy,w,h,t);
   for (let k=0;k<48;k++){ const cs=rectCells(cx,cy+k,w,h,t); if (cs.some(c=>!free(c[0],c[1]))) break; best=cs; const by=cs[0][1]+h; if (cs.slice(-w).some(c=>!free(c[0],by))) break; }
   return best; }
-function stampFor(id, cx, cy) {
+// footprints of everything built or being built, for snapping new sites into rows
+function footprints() {
+  const f=[];
+  for (const r of rooms) f.push({ x0:r.x, y0:r.y, x1:r.x+r.w-1, y1:r.y+r.h-1 });
+  for (const gn of gens) f.push({ x0:gn.x, y0:gn.y, x1:gn.x+gn.w-1, y1:gn.y+gn.h-1 });
+  for (const st of sites) f.push(st);
+  return f;
+}
+// a construction site can be laid over open space or solid earth; the miners dig it out first
+function siteStamp(id, cx, cy) {
+  const d=ITEM[id], w=d.w, h=d.h, t = id==='gen' ? HQ : id==='pump' ? PUMP : ROOM;
+  let x0=Math.round(cx-w/2), y0=Math.round(cy-h/2), snapped=false;
+  const fp = footprints();
+  for (const nb of fp) if (Math.abs((y0+h-1)-nb.y1)<=3 && x0<=nb.x1+10 && x0+w-1>=nb.x0-10) { y0 = nb.y1-h+1; snapped=true; break; }   // line up floors
+  for (const nb of fp) if (y0<=nb.y1 && y0+h-1>=nb.y0) {                                                                                 // butt up against neighbours
+    if (Math.abs(x0-(nb.x1+1))<=3) { x0=nb.x1+1; snapped=true; break; }
+    if (Math.abs((x0+w-1)-(nb.x0-1))<=3) { x0=nb.x0-w; snapped=true; break; }
+  }
+  const cells=[]; let ok=true, solid=0, onSite=false, below=false;
+  for (let y=y0;y<y0+h;y++) for (let x=x0;x<x0+w;x++) {
+    const c=[x,y,t];
+    if (!inB(x,y)) { c.ok=false; ok=false; cells.push(c); continue; }
+    const tt=g[y*W+x]; c.ok = !SOLID[tt] || DIGT[tt]>0;
+    if (siteCovers(x,y)) { c.ok=false; onSite=true; }
+    if (!c.ok) ok=false; if (SOLID[tt]) solid++;
+    if (y===y0+h-1 && inB(x,y+1) && SOLID[g[(y+1)*W+x]]) below=true;
+    cells.push(c);
+  }
+  return { cells, ok: ok && (solid>0 || below), onSite, snapped };
+}
+function stampFor(id, cx, cy, asSite) {
   cx = Math.floor(cx); cy = Math.floor(cy);
+  if (asSite && BUILT.has(id)) return siteStamp(id, cx, cy);
   let cells, needAll=false;
   switch (id) {
     case 'prop': cells = propCells(cx,cy); if (!cells) return { cells:[], ok:false }; break;
@@ -559,6 +590,21 @@ function backfillAbove(cells) {
   for (let x=x0;x<=x1;x++) { const run=[];
     for (let y=y0-1; y>=Math.max(0,y0-10); y--) { const i=y*W+x; if (g[i]===E) { run.push(i); continue; } if (SOLID[g[i]]) for (const j of run) { g[j]=TIMBER; hp[j]=0; prop[j]=0; } break; } }
 }
+// a site buried in solid earth gets an access passage marked from the nearest open space
+function connectSite(st) {
+  const fp = new Set(st.cells.map(c=>idx(c[0],c[1])));
+  for (const i of fp) { const x=i%W; for (const n of [i-1,i+1,i-W,i+W]) if (n>=0 && n<W*H && !fp.has(n) && Math.abs((n%W)-x)<=1 && walkable(n)) return; }   // already touches open space
+  bfsGen++; const q=[]; for (const i of fp) { bfsSeen[i]=bfsGen; bfsPrev[i]=-1; q.push(i); }
+  for (let qi=0; qi<q.length && qi<20000; qi++) {
+    const c=q[qi], cx=c%W;
+    for (const n of [c-W,c-1,c+1,c+W]) {
+      if (n<0||n>=W*H) continue; if ((n===c-1&&cx===0)||(n===c+1&&cx===W-1)) continue;
+      if (bfsSeen[n]===bfsGen) continue; bfsSeen[n]=bfsGen; bfsPrev[n]=c;
+      if (walkable(n)) { for (let p=c; p!==-1 && !fp.has(p); p=bfsPrev[p]) { mark[p]=1; if (p-W>=0 && DIGT[g[p-W]] && !fp.has(p-W)) mark[p-W]=1; } return; }   // a 2-tall passage
+      if (DIGT[g[n]]) q.push(n);
+    }
+  }
+}
 function finishSite(st) {
   sites.splice(sites.indexOf(st),1);
   commitStructure(st.id, st.cells);
@@ -573,16 +619,18 @@ function finishSite(st) {
 function place(id, cx, cy, freeOfCharge) {
   const it = ITEM[id];
   if (!freeOfCharge && gold < it.cost) { toast('Not enough gold — dig for ore ◆'); sfx.deny(); return false; }
-  const s = stampFor(id, cx, cy);
+  const s = stampFor(id, cx, cy, !freeOfCharge);
   if (!s.ok) { if (!freeOfCharge) { toast(s.onSite ? 'Something is already being built there' : id==='prop' ? 'Drop props inside a tunnel or on solid ground' : 'Needs open space touching solid ground'); sfx.deny(); } return false; }
   const cells = s.cells.filter(c=>c.ok);
   if (freeOfCharge) { commitStructure(id, cells); return true; }
   gold -= it.cost; sfx.thunk(); haptic('light');
   if (BUILT.has(id)) {
     let x0=1e9,x1=-1,y0=1e9,y1=-1; for (const c of cells) { x0=Math.min(x0,c[0]); x1=Math.max(x1,c[0]); y0=Math.min(y0,c[1]); y1=Math.max(y1,c[1]); }
-    sites.push({ id, cells, x0, x1, y0, y1, work:0, need: BUILD_TIME[id] || 10 });
+    sites.push({ id, cells, x0, x1, y0, y1, work:0, need: BUILD_TIME[id] || 10, clear:false });
+    for (const c of cells) { const i=idx(c[0],c[1]); if (SOLID[g[i]] && DIGT[g[i]]) mark[i]=1; }   // the footprint is dug out first
+    connectSite(sites[sites.length-1]);
     it.cost += id==='gen' ? 30 : id==='pump' ? 0 : id==='listen' ? 20 : 40;
-    toast(`${it.name}: site marked — your miners will build it`);
+    toast(cells.some(c=>SOLID[g[idx(c[0],c[1])]]) ? `${it.name}: miners will dig out the site, then build it` : `${it.name}: site marked — your miners will build it`);
     return true;
   }
   commitStructure(id, cells);
@@ -1007,7 +1055,7 @@ function findSiteJob(d) {   // walk to any open cell on or right next to a const
   bfsGen++; const start = d.y*W+d.x, q=[start]; bfsSeen[start]=bfsGen; bfsPrev[start]=-1;
   for (let qi=0; qi<q.length && qi<40000; qi++) {
     const c=q[qi], cx=c%W, cy=(c/W)|0;
-    const st = sites.find(t => cx>=t.x0-1 && cx<=t.x1+1 && cy>=t.y0-1 && cy<=t.y1+1);
+    const st = sites.find(t => t.clear && cx>=t.x0-1 && cx<=t.x1+1 && cy>=t.y0-1 && cy<=t.y1+1);
     if (st) { const path=[]; for (let p=c; p!==-1 && p!==start; p=bfsPrev[p]) path.push(p); return { site:st, path:path.reverse() }; }
     for (const n of [c-1,c+1,c-W,c+W]) {
       if (n<0||n>=W*H) continue; if ((n===c-1&&cx===0)||(n===c+1&&cx===W-1)) continue;
@@ -1080,7 +1128,16 @@ function updateMedics() {
   }
 }
 function spawnDigger(hut) { diggers.push({ hut, x:hut.x+2, y:hut.y+hut.h-1, fx:hut.x+2, fy:hut.y+hut.h-1, path:[], target:-1, work:0, wait:(rand()*30)|0, hp:1, dir:1, anim:0, digging:false }); }
+function updateSites() {
+  if (tick%20) return;
+  for (const st of sites) {
+    let clear=true;
+    for (const c of st.cells) { const i=idx(c[0],c[1]); if (SOLID[g[i]]) { clear=false; if (DIGT[g[i]]) mark[i]=1; } }
+    st.clear = clear;
+  }
+}
 function updateDiggers() {
+  updateSites();
   // huts keep their crews topped up
   for (const r of rooms) if (r.kind==='miners') {
     const crew = diggers.filter(d=>d.hut===r).length;
@@ -1139,7 +1196,7 @@ function updateDiggers() {
       for (const n of [d.y*W+d.x-1, d.y*W+d.x+1, d.y*W+d.x-W, d.y*W+d.x+W]) if (n>=0 && n<W*H && mark[n] && DIGT[g[n]] && !claimed.has(n)) { d.target=n; claimed.add(n); break; }
     }
   }
-  if (!diggers.some(d=>!d.down)) for (const st of [...sites]) { st.work += .25/60; if (st.work>=st.need) finishSite(st); }
+  if (!diggers.some(d=>!d.down)) for (const st of [...sites]) { st.work += .25/60; if (st.work>=st.need) { for (const c of st.cells) { const i=idx(c[0],c[1]); if (DIGT[g[i]]) { g[i]=E; mark[i]=0; } } finishSite(st); } }
   // gentle nudge if work is marked but nobody can reach it
   if (state==='play' && diggers.length && idle===diggers.filter(d=>!d.down).length && idle>0 && tick%60===0) {
     let any=false; for (let i=0;i<mark.length;i+=3) if (mark[i]) { any=true; break; }
@@ -1347,19 +1404,26 @@ function render() {
 }
 function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.floor(x*scale),Math.floor(y*scale),Math.ceil(w*scale),Math.ceil(h*scale)); }
 function drawEntities(s) {
-  // generators: housing, flywheel, gauge lamps, exhaust stack
+  // generators: a timber-framed engine room with the dynamo inside
   for (const gn of gens) {
-    const {x,y,w,h} = gn;
-    px(x,y,w,1,'#2b3328'); px(x+1,y+h-4,2,4,'#1a1410');
-    const a=tick*.15, cx=x+5, cy=y+3.5; px(cx-2,cy-2,5,5,'#232822');
-    for (let k=0;k<4;k++) px(cx+Math.cos(a+k*1.57)*1.6, cy+Math.sin(a+k*1.57)*1.6, 1, 1, '#a9b39a');
-    for (let k=0;k<3;k++) px(x+9+k*1.5,y+2,1,1, (tick>>4)%3===k ? '#ffe9a8' : '#7a6a3a');
-    px(x+9,y+4,4,1, gn.oc ? ((tick>>2)&1?'#ffb040':'#ff6020') : gn.hp/gn.max<.35 ? ((tick>>3)&1?'#e04a30':'#5a1a10') : '#6f8a4a');
+    const {x,y,w,h} = gn, fl=y+h-1, hurt = gn.hit>0;
+    px(x,y,w,h, hurt?'#4a2a20':'#2a2820');                                              // back wall
+    for (let k=0;k<w;k+=3) px(x+k,y+1,.3,h-2,'#24221c');                                // planking
+    px(x,y,w,1,'#7a5531'); px(x,y,1,h,'#7a5531'); px(x+w-1,y,1,h,'#7a5531');            // timber frame
+    px(x+1,y+1,.6,.6,'#5a3e22'); px(x+w-1.6,y+1,.6,.6,'#5a3e22');                       // braces
+    px(x,fl,w,1,'#1c1712');                                                              // floor
+    px(x+w/2-.3,y+1,.6,.6,(tick>>5)%9?'#ffe196':'#c8a860');                              // lamp
+    px(x+2,y+2,8,h-3,'#3a4436'); px(x+2,y+2,8,.5,'#55604a');                           // engine block
+    const a=tick*(gn.oc?.3:.15), cx=x+4.5, cy=y+4; px(cx-1.8,cy-1.8,3.6,3.6,'#1a1e18');
+    for (let k=0;k<4;k++) px(cx+Math.cos(a+k*1.57)*1.3-.3, cy+Math.sin(a+k*1.57)*1.3-.3, .7, .7, '#a9b39a');   // flywheel
+    for (let k=0;k<3;k++) px(x+7+k*.9,y+3,.6,.6, (tick>>4)%3===k ? '#ffe9a8' : '#7a6a3a');                       // gauges
+    px(x+7,y+4.4,2.6,.6, gn.oc ? ((tick>>2)&1?'#ffb040':'#ff6020') : gn.hp/gn.max<.35 ? ((tick>>3)&1?'#e04a30':'#5a1a10') : '#6f8a4a');
+    px(x+11,y+3,1.2,h-4,'#4a4a50'); px(x+11.2,y+2.4,.8,.6,'#c8a040');                  // fuel drum
+    px(x+w-3,y-3,1,4,'#3a3630');                                                          // exhaust up through the beam
     if (state==='play' && !capThis) { ctx.textAlign='center'; ctx.font=`bold ${Math.round(Math.max(14*dpr,s*3))}px ui-monospace,Menlo,monospace`;
       const t = gn.oc ? `⚡ ${Math.ceil(gn.oc/60)}s` : gn.cool ? `${Math.ceil(gn.cool/60)}s` : 'TAP ⚡';
       ctx.fillStyle='#000a'; ctx.fillText(t,(x+w/2)*s+1,(y-5)*s+1); ctx.fillStyle = gn.oc ? '#ffb040' : gn.cool ? '#8a8a80' : '#f0d68a'; ctx.fillText(t,(x+w/2)*s,(y-5)*s); }
-    px(x+w-3,y-4,2,4,'#2a2420');
-    if (state!=='over' && tick%9===0) particles.push({x:x+w-2,y:y-4,vx:.02,vy:-.06,life:120,max:120,k:'smoke'});
+    if (state!=='over' && tick%9===0) particles.push({x:x+w-2.5,y:y-3,vx:.02,vy:-.06,life:120,max:120,k:'smoke'});
     if (gn.hit>0) gn.hit--;
   }
   // rooms: lit interiors with little people at work
@@ -1396,10 +1460,11 @@ function drawEntities(s) {
   for (const st of sites) {
     for (const c of st.cells) { ctx.fillStyle = ((c[0]+c[1])&1) ? 'rgba(230,190,90,.30)' : 'rgba(230,190,90,.16)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); }
     ctx.strokeStyle='#e6bf4acc'; ctx.lineWidth=Math.max(1,dpr); ctx.setLineDash([s,s]); ctx.strokeRect(st.x0*s,st.y0*s,(st.x1-st.x0+1)*s,(st.y1-st.y0+1)*s); ctx.setLineDash([]);
-    const f=Math.min(1,st.work/st.need); px(st.x0,st.y0-1.6,st.x1-st.x0+1,.8,'#1a1410'); px(st.x0,st.y0-1.6,(st.x1-st.x0+1)*f,.8,'#9fd07a');
+    const f=Math.min(1,st.work/st.need); px(st.x0,st.y0-1.6,st.x1-st.x0+1,.8,'#1a1410'); px(st.x0,st.y0-1.6,(st.x1-st.x0+1)*f,.8, st.clear?'#9fd07a':'#e6bf4a');
+    if (!st.clear && state==='play' && !capThis) { ctx.font=`bold ${Math.round(Math.max(11*dpr,s*2.2))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center'; ctx.fillStyle='#e6bf4a'; ctx.fillText('DIGGING OUT', (st.x0+st.x1+1)/2*s, (st.y0-2.4)*s); }
   }
   // ghost for a room waiting to be placed
-  if (roomPending && roomGhost) { const st=stampFor(roomPending, roomGhost.x, roomGhost.y); for (const c of st.cells) { ctx.fillStyle = st.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); } if (roomPending==='gen' && st.cells.length) genLabel(st.cells[0], s); }
+  if (roomPending && roomGhost) { const st=stampFor(roomPending, roomGhost.x, roomGhost.y, true); for (const c of st.cells) { ctx.fillStyle = st.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); } if (roomPending==='gen' && st.cells.length) genLabel(st.cells[0], s); if (st.snapped && st.cells.length) { ctx.strokeStyle='#9fd07a'; ctx.lineWidth=Math.max(1,dpr); const c0=st.cells[0], c1=st.cells[st.cells.length-1]; ctx.strokeRect(c0[0]*s,c0[1]*s,(c1[0]-c0[0]+1)*s,(c1[1]-c0[1]+1)*s); } }
   // miners: slim figures in tin hats, about five cells tall
   for (const d of diggers) if (d.down && !d.carried && !d.healing) {
     const x=d.fx-.6, y=d.fy+1;
