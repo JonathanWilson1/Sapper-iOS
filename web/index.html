@@ -29,9 +29,9 @@
   #hqFill{position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(#6f8a4a,#3f5228);transition:width .2s}
   #hqBar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-shadow:1px 1px 0 #000}
   #hqBar.hurt #hqFill{background:linear-gradient(#c0503a,#7a2418)}
-  #banner{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 48px);text-align:center;font-weight:900;font-size:24px;letter-spacing:3px;
+  #banner{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 48px);text-align:center;font-weight:900;font-size:clamp(17px,5.4vw,24px);letter-spacing:2px;padding:0 54px 0 10px;
     color:#f0d68a;text-shadow:2px 2px 0 #000,0 0 12px #b33a2a;opacity:0;transition:opacity .3s;pointer-events:none;z-index:4}
-  #banner small{display:block;font-size:14px;letter-spacing:2px;color:var(--ink);opacity:.85}
+  #banner small{display:block;font-size:clamp(11px,3.4vw,14px);letter-spacing:2px;color:var(--ink);opacity:.85}
   #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 104px);max-width:86vw;background:var(--panel);
     border:2px solid var(--edge);padding:10px 14px;font-size:16px;line-height:1.4;opacity:0;transition:opacity .3s;pointer-events:none;z-index:4;text-align:center}
   #mini{position:fixed;right:6px;top:calc(env(safe-area-inset-top) + 52px);width:40px;height:92px;image-rendering:pixelated;border:2px solid var(--edge);z-index:5;background:#000}
@@ -97,6 +97,8 @@
   <canvas id="title"></canvas>
   <p class="tag">HOLD THE LINE. DIG DEEP. DON'T DROWN.</p>
   <button id="startBtn" class="primary">Dig In</button>
+  <button id="dailyBtn">Daily Challenge</button>
+  <div class="small" id="dailyStat"></div>
   <button id="campBtn">Boot Camp</button>
   <button id="helpBtn">Field Manual</button>
   <button id="soundBtn">Sound: On</button>
@@ -119,10 +121,19 @@
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>CONCRETE</em> soaks up shellfire — tap it, then draw with one finger.</p>
     <p><em>PUMP</em> drains floods. <em>MG NEST</em> cuts down raiders.</p>
+    <p><em>ROOMS</em>: a <em>Field Hospital</em> slowly repairs nearby generators, a <em>Mine Head</em> makes nearby ore pay 50% more, and a <em>Magazine</em> pays ◆40 every wave — but blows up if it's hit. A <em>Listening Post</em> hears enemy tunnellers.</p>
+    <p><em>ENEMY TUNNELLERS</em> dig toward your generators to plant mines. Their tunnels are hidden — a listening post reveals them. Dig into one to stop it.</p>
+    <p><em>DAILY CHALLENGE</em>: everyone gets the same map and attack order each day. Compare scores with friends.</p>
     <p>Drag items up out of the tray to place them. <em>Pinch</em> to zoom.</p>
     <p>Lose every <em>GENERATOR</em> and the line falls. Survive as long as you can.</p>
   </div>
   <button id="helpBack" class="primary">Understood</button>
+</div>
+
+<div id="roomsScr" class="screen" hidden>
+  <div class="card"><h2>BUILD A ROOM <span class="gold" id="roomGold"></span></h2><div id="roomList"></div>
+  <p class="small" style="margin-top:8px">Pick one, then tap open space in your tunnels to place it.</p></div>
+  <button id="roomClose">Cancel</button>
 </div>
 
 <div id="upg" class="screen" hidden>
@@ -155,13 +166,13 @@ const W = 192, H = 440;
 const OX = (W-128)/2;              // base layout offset (layout was designed at 128 wide)
 const VIEWW = 112, ZMIN = VIEWW/W;  // cells visible across the screen at zoom 1
 const E=0,SOIL=1,SAND=2,ROCK=3,WATER=4,TIMBER=5,BAGS=6,CONC=7,GOLD=8,RUBBLE=9,FIRE=10,HQ=11,PUMP=12,MG=13,BED=14,GRASS=15,LAMP=16;
-const DRILL=17;
-const NT = 18;
+const DRILL=17, ROOM=18;
+const NT = 19;
 const SOLID = new Uint8Array(NT).fill(1); SOLID[E]=0; SOLID[WATER]=0; SOLID[FIRE]=0;
 //            E  SOIL SAND ROCK WATR TIMB BAGS CONC GOLD RUBB FIRE HQ  PUMP MG   BED GRAS LAMP
-const RES  = [0, 1,   .8,  2.5, .4,  1.5, 3.5, 6,   2.5, .6,  0,   5,  3,   3,   99, 1,   .5, 3];
-const HARD = [0, 0,   0,   2.5, 0,   1,   2.5, 5.5, 2.5, 0,   0,   99, 3,   3,  999, 0,   0,  2];
-const DIGT = [0, 3,   2,   22,  0,   0,   0,   0,   4,  2,   0,   0,  0,   0,   0,  3,   0,  0];
+const RES  = [0, 1,   .8,  2.5, .4,  1.5, 3.5, 6,   2.5, .6,  0,   5,  3,   3,   99, 1,   .5, 3, 3];
+const HARD = [0, 0,   0,   2.5, 0,   1,   2.5, 5.5, 2.5, 0,   0,   99, 3,   3,  999, 0,   0,  2, 2.5];
+const DIGT = [0, 3,   2,   22,  0,   0,   0,   0,   4,  2,   0,   0,  0,   0,   0,  3,   0,  0, 0];
 const SUPPORTS = new Uint8Array(NT); SUPPORTS[TIMBER]=1; SUPPORTS[CONC]=1; SUPPORTS[BAGS]=1; SUPPORTS[HQ]=1;
 
 // ---------- world state
@@ -171,14 +182,15 @@ const sh  = new Uint8Array(W*H);   // per-cell shade noise
 const st  = new Uint8Array(W*H);   // updated-this-tick stamp
 const bgc = new Uint8Array(W*H);   // back wall: 0 sky,1 soil,2 rock,3 sand
 const sup = new Uint8Array(W*H);
-const prop = new Uint8Array(W*H);  // background timber bracing: supports ceilings, lets water/raiders through
+const prop = new Uint8Array(W*H);
+const secret = new Uint8Array(W*H);   // enemy tunnel cells the player hasn't discovered yet (drawn as earth)  // background timber bracing: supports ceilings, lets water/raiders through
 const PROPBG = 99;   // ceiling support map
 const hbuf= new Uint8Array(W*H);
 const surfOrig = new Int16Array(W);
 const SKY = 44;
 
 let tick = 0, stampV = 1;
-let gens = [], drills = [], pumps = [], mgs = [], soldiers = [], shells = [], particles = [], flashes = [], tracers = [], popups = [], flares = [], timers = [];
+let gens = [], drills = [], rooms = [], pumps = [], mgs = [], soldiers = [], shells = [], particles = [], flashes = [], tracers = [], popups = [], flares = [], timers = [];
 let shake = 0, gold = 0, rainUntil = 0, demo = true;
 const game = { t: 0, best: +(localStorage.getItem('sapper.best')||0), mined: 0, kills: 0, nextEvent: 22, harassAt: 40, intensity: 1, events: 0 };
 let state = 'menu';
@@ -202,7 +214,7 @@ function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul
 const PAL = { // base rgb, variance
   [SOIL]:[74,52,36,14],[SAND]:[170,140,86,16],[ROCK]:[86,86,92,14],[WATER]:[36,84,132,12],[TIMBER]:[116,80,44,16],
   [BAGS]:[132,116,78,12],[CONC]:[120,116,106,10],[GOLD]:[214,168,44,26],[RUBBLE]:[96,76,58,16],[HQ]:[64,72,58,8],
-  [PUMP]:[68,80,92,8],[MG]:[58,62,54,8],[BED]:[24,22,26,6],[GRASS]:[72,80,38,12],[LAMP]:[255,224,150,0],[DRILL]:[78,80,86,8],[FIRE]:[255,140,40,0]
+  [PUMP]:[68,80,92,8],[MG]:[58,62,54,8],[BED]:[24,22,26,6],[GRASS]:[72,80,38,12],[LAMP]:[255,224,150,0],[DRILL]:[78,80,86,8],[ROOM]:[92,82,62,8],[FIRE]:[255,140,40,0]
 };
 const palR=new Uint8Array(NT*8), palG=new Uint8Array(NT*8), palB=new Uint8Array(NT*8);
 for (const k in PAL) { const [r,gg,b,v]=PAL[k]; for(let s=0;s<8;s++){ const o=(s-3.5)/3.5*v; palR[k*8+s]=Math.max(0,Math.min(255,r+o)); palG[k*8+s]=Math.max(0,Math.min(255,gg+o*.9)); palB[k*8+s]=Math.max(0,Math.min(255,b+o*.8)); } }
@@ -231,7 +243,7 @@ function buildSky(s) {
 
 // ---------- world generation
 function genWorld(s) {
-  seed = s; g.fill(0); hp.fill(0); prop.fill(0); bgc.fill(0); st.fill(0);
+  seed = s; g.fill(0); hp.fill(0); prop.fill(0); secret.fill(0); bgc.fill(0); st.fill(0);
   const r = mulberry(s);
   buildSky(s);
   for (let x=0;x<W;x++) surfOrig[x] = SKY + Math.round((fbm(x*.04,3.3,s,2)-.5)*6);
@@ -340,6 +352,7 @@ function destroyGen(gn) {
 function mineOre(x,y) {
   const d = Math.max(0, y - surfOrig[x]);
   let v = Math.round(5 + 10*Math.min(1, d/250));
+  if (roomNear('mine', x, y, 30)) v = Math.round(v*1.5);
   if (rand() < .03) { v = 40; popup(x,y,'NUGGET +40'); sfx.coin(); sfx.coin(); }
   else if (rand() < .3) popup(x,y,'+'+v);
   gold += v; game.mined += v; sfx.coin();
@@ -365,7 +378,7 @@ function updateDrills() {
     const by=d.y+4;
     if (by>=H) { d.rem=0; continue; }
     let hard=false, block=false;
-    for (let c=0;c<DRILL_W;c++) { const t=g[by*W+d.x+c]; if (t===BED||t===HQ||t===CONC||t===DRILL||t===MG||t===PUMP) block=true; if (t===ROCK||t===GOLD) hard=true; }
+    for (let c=0;c<DRILL_W;c++) { const t=g[by*W+d.x+c]; if (t===BED||t===HQ||t===CONC||t===DRILL||t===MG||t===PUMP||t===ROOM) block=true; if (t===ROCK||t===GOLD) hard=true; }
     if (block) { d.rem=0; toast('Drill hit something it can\'t bore through'); continue; }
     d.spin=(d.spin||0)+1;
     if (++d.work < (hard ? 10-3*up.drill : Math.max(1,3-up.drill))) continue;
@@ -414,16 +427,47 @@ function renderUpgrades() {
 }
 function openUpgrades(){ if (state!=='play') return; state='paused'; renderUpgrades(); show('upg',true); }
 
+// ---------- rooms: dig a space, drop one in; each works on its own
+const ROOMDEFS = [
+  { id:'hospital', name:'FIELD HOSPITAL', desc:'Slowly repairs generators within 40 cells', cost:80,  w:8, h:5 },
+  { id:'mine',     name:'MINE HEAD',      desc:'Ore dug within 30 cells pays 50% more',     cost:90,  w:8, h:5 },
+  { id:'magazine', name:'MAGAZINE',       desc:'Pays ◆40 every wave — explodes if hit',    cost:50,  w:8, h:5 },
+  { id:'listen',   name:'LISTENING POST', desc:'Hears enemy tunnellers within 90 cells',   cost:40,  w:3, h:3 },
+];
+let roomPending = null;
+function openRooms(){ if (state!=='play') return; state='paused'; $('roomGold').textContent='◆ '+gold;
+  $('roomList').innerHTML = ROOMDEFS.map(r => `<div class="uprow"><div><b>${r.name}</b><small>${r.desc}</small></div><button data-room="${r.id}" ${gold<ITEM[r.id].cost?'style="opacity:.5"':''}>◆${ITEM[r.id].cost}</button></div>`).join('');
+  show('roomsScr',true); }
+function chooseRoom(id){ show('roomsScr',false); state='play'; last=performance.now();
+  if (gold < ITEM[id].cost) { toast('Not enough gold'); sfx.deny(); return; }
+  roomPending = id; toast(`Tap open space in a tunnel to place the ${ITEM[id].name}`); }
+const roomNear = (kind, x, y, r) => rooms.some(o => o.kind===kind && Math.hypot(o.x+o.w/2-x, o.y+o.h/2-y) < r);
+function updateRooms() {
+  for (let k=rooms.length-1;k>=0;k--) {
+    const r=rooms[k];
+    if (g[idx(r.x,r.y)]!==ROOM) {
+      rooms.splice(k,1);
+      if (r.kind==='magazine') { explode(r.x+4, r.y+2, 18, {fire:1}); if (state==='play') toast('The magazine went up!'); }
+      else if (state==='play') toast(`${ITEM[r.kind].name} destroyed`);
+      continue;
+    }
+    if (state!=='play') continue;
+    if (r.kind==='hospital' && tick%30===0) for (const gn of gens) if (Math.hypot(gn.x+gn.w/2-r.x-4, gn.y+gn.h/2-r.y-2) < 40 && gn.hp<gn.max) { gn.hp=Math.min(gn.max, gn.hp+.6); if (tick%180===0) popup(gn.x+gn.w/2, gn.y-1, '+HP'); }
+  }
+}
+
 // ---------- structures / stamps
 const ITEMS = [
   { id:'prop',     name:'PROP',    cost:10,  kind:'stamp' },
   { id:'concrete', name:'CONCRETE',cost:1,   kind:'draw' },
   { id:'pump',     name:'PUMP',    cost:40,  kind:'stamp' },
   { id:'mg',       name:'MG', cost:60,  kind:'stamp' },
+  { id:'room',     name:'ROOM',    cost:0,   kind:'action' },
   { id:'upg',      name:'UPGRADE', cost:0,   kind:'action' },
   { id:'gen',      name:'GEN',cost:100, kind:'stamp' },
 ];
 const ITEM = Object.fromEntries(ITEMS.map(i=>[i.id,i]));
+for (const r of ROOMDEFS) ITEM[r.id] = { ...r, kind:'room', base:r.cost };
 const free = (x,y) => inB(x,y) && !SOLID[g[idx(x,y)]];
 
 function propCells(cx, cy) {
@@ -461,6 +505,7 @@ function stampFor(id, cx, cy) {
     case 'mg': cells = dropRect(cx,cy,5,2,MG); needAll=true; break;
     case 'drill': cells = dropRect(cx,cy,DRILL_W,4,DRILL); needAll=true; break;
     case 'gen': cells = dropRect(cx,cy,GEN_W,GEN_H,HQ); needAll=true; break;
+    case 'hospital': case 'mine': case 'magazine': case 'listen': { const d=ITEM[id]; cells = dropRect(cx,cy,d.w,d.h,ROOM); needAll=true; break; }
     default: return { cells:[], ok:false };
   }
   const set = new Set(cells.map(c=>c[1]*W+c[0]));
@@ -484,6 +529,7 @@ function place(id, cx, cy, freeOfCharge) {
   if (id==='pump') { const c=s.cells[0]; pumps.push({ x:c[0], y:c[1], spin:0 }); }
   if (id==='mg')   { const c=s.cells[0]; mgs.push({ x:c[0], y:c[1], cool:0, ang:-Math.PI/2, flash:0 }); }
   if (id==='gen')  { const c=s.cells[0]; addGen(c[0],c[1]); }
+  if (it && it.kind==='room') { const c=s.cells[0]; rooms.push({ kind:id, x:c[0], y:c[1], w:it.w, h:it.h }); if (!freeOfCharge) { gold -= it.cost; it.cost += id==='listen'?20:40; sfx.thunk(); haptic('medium'); toast(`${it.name} built`); } return true; }
   if (id==='prop' && !freeOfCharge) game.props++;
   if (id==='drill'){ const c=s.cells[0]; drills.push({ x:c[0], y:c[1], rem:0, work:0 }); }
   if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); if (id==='gen') { it.cost += 30; buildTray(); { const gn=gens[gens.length-1], n=crowd(gn.x+gn.w/2,gn.y+gn.h/2,gn); toast(`Generator online: +${Math.round(genEff(gn)*60)} ◆/min` + (n?` (crowded — space them ${GEN_SPACING}+ apart)`:'')); } } }
@@ -492,6 +538,7 @@ function place(id, cx, cy, freeOfCharge) {
 function doAction(id) {
   const it = ITEM[id];
   if (id==='upg') { openUpgrades(); return; }
+  if (id==='room') { if (roomPending) { roomPending=null; toast('Room placement cancelled'); return; } openRooms(); return; }
   if (gold < it.cost) { toast('Not enough gold'); sfx.deny(); return; }
   if (id==='repair') {
     const gn = gens.reduce((a,b)=> (b.hp/b.max < a.hp/a.max ? b : a), gens[0]);
@@ -633,7 +680,7 @@ function updateBodies() {
       bodies.splice(k,1);
       const n=b.cells.length, c0=b.cells[0], x=c0%W, y=(c0/W)|0;
       if (b.vy>.5) {
-        for (const c of b.cells) { const j=c+W; if (j<W*H && !b.set.has(j)) { if (g[j]===HQ) hurtGen(genAt(j%W,(j/W)|0), n*.04); else if (g[j]===TIMBER||g[j]===LAMP||g[j]===PUMP||g[j]===MG||g[j]===DRILL) g[j]=RUBBLE; } }
+        for (const c of b.cells) { const j=c+W; if (j<W*H && !b.set.has(j)) { if (g[j]===HQ) hurtGen(genAt(j%W,(j/W)|0), n*.04); else if (g[j]===TIMBER||g[j]===LAMP||g[j]===PUMP||g[j]===MG||g[j]===DRILL||g[j]===ROOM) g[j]=RUBBLE; } }
         const near = 1 - Math.min(1, Math.abs(y - (cam.y + viewRows()/2)) / viewRows());
         shake=Math.min(12, shake+Math.sqrt(n)*.5*Math.max(.2,near)); sfx.boom(Math.min(10,2+Math.sqrt(n)*.6), Math.max(.15,near)*.7);
         if (near>.4) haptic(n>80?'heavy':'medium');
@@ -745,14 +792,49 @@ function workOn(s, x, y) {
   if (!inB(x,y)) return;
   const i=y*W+x, t=g[i];
   if (t===HQ) { hurtGen(genAt(x,y), .012); s.atk=6; return; }
-  const need = { [SOIL]:14,[GRASS]:14,[SAND]:8,[RUBBLE]:8,[ROCK]:110,[GOLD]:100,[TIMBER]:50,[BAGS]:70,[CONC]:260,[PUMP]:90,[MG]:90,[LAMP]:20,[DRILL]:90 }[t];
+  const need = { [SOIL]:14,[GRASS]:14,[SAND]:8,[RUBBLE]:8,[ROCK]:110,[GOLD]:100,[TIMBER]:50,[BAGS]:70,[CONC]:260,[PUMP]:90,[MG]:90,[LAMP]:20,[DRILL]:90,[ROOM]:90 }[t];
   if (!need) return;
   s.work++; s.atk=4;
   if (s.work>=need) { g[i]=E; hp[i]=0; s.work=0; }
 }
+function spawnTunneller(side) {
+  const gn = gens.length ? gens[drand()*gens.length|0] : null; if (!gn) return;
+  const y = gn.y + gn.h - 1, x = side<0 ? 1.5 : W-1.5;
+  soldiers.push({ tun:true, x, y, fy:0, vy:0, hp:3, dir:side<0?1:-1, work:0, anim:0, atk:0, target:gn, carved:[], revealed:false, fuse:0, speed:45 });
+}
+// enemy tunnellers dig a hidden gallery toward a generator and plant a mine; a listening post reveals them
+function updateTunneller(s) {
+  s.anim += .1;
+  if (s.hp<=0) { gold += 30; game.kills++; game.tunnellersStopped=(game.tunnellersStopped||0)+1; popup(s.x, s.y-4, '+30'); if (state==='play') toast('Enemy tunneller stopped  +◆30'); for (const i of s.carved) secret[i]=0; return true; }
+  if (!gens.includes(s.target)) s.target = nearestGen(s.x, s.y);
+  const gn = s.target; if (!gn) return true;
+  const heard = roomNear('listen', s.x, s.y, 90);
+  if (heard && !s.revealed) { s.revealed = true; if (state==='play') { banner('TUNNELLER DETECTED','DIG INTO THEIR GALLERY TO STOP THEM'); haptic('medium'); } }
+  if (s.revealed && tick%20===0) for (const i of s.carved) secret[i]=0;
+  if (s.fuse>0) {
+    if (s.revealed && tick%15===0) sfx.tick();
+    if (--s.fuse===0) { for (const i of s.carved) secret[i]=0; explode(s.x, s.y-1, 16, {fire:.5}); if (state==='play') toast('An enemy mine went off!'); return true; }
+    return false;
+  }
+  const gx = gn.x + gn.w/2; s.dir = Math.sign(gx - s.x) || s.dir;
+  if (Math.abs(gx - s.x) < gn.w/2 + 3) { s.fuse = 6*60; if (s.revealed && state==='play') banner('MINE PLANTED','6 SECONDS — STOP THEM'); return false; }
+  if (s.revealed && tick%40===0) sfx.dig();
+  if (++s.work < s.speed) return false;
+  s.work = 0;
+  const nx = Math.floor(s.x) + s.dir; let hard=false;
+  for (let k=0;k<3;k++) { const yy=s.y-k; if (!inB(nx,yy)) continue; const i=yy*W+nx, t=g[i];
+    if (t===CONC||t===HQ||t===ROOM||t===BED||t===DRILL) { s.fuse = 6*60; if (s.revealed && state==='play') banner('MINE PLANTED','6 SECONDS — STOP THEM'); return false; }
+    if (t===ROCK||t===GOLD) hard=true;
+    if (t!==E && t!==WATER) { g[i]=E; hp[i]=0; prop[i]=0; if (!s.revealed) secret[i]=1; s.carved.push(i); } }
+  if (hard) s.work = -s.speed*2;
+  s.x = nx + .5;
+  return false;
+}
 function updateSoldiers() {
   for (let k=soldiers.length-1;k>=0;k--) {
-    const s=soldiers[k]; s.anim+=.15; if (s.atk>0) s.atk--;
+    const s=soldiers[k];
+    if (s.tun) { if (updateTunneller(s)) soldiers.splice(k,1); continue; }
+    s.anim+=.15; if (s.atk>0) s.atk--;
     let cx=Math.floor(s.x), cy=s.y;
     if (!passable(cx,cy-1) || !passable(cx,cy-2)) s.hp -= .1;          // buried
     if (inB(cx,cy-3) && g[(cy-3)*W+cx]===WATER) s.hp -= .012;            // drowning
@@ -833,6 +915,18 @@ function popup(x,y,txt){ popups.push({x,y,txt,life:60}); }
 
 // ---------- digging
 let digAt = null, digSoundT = 0, digIdle = 0;
+const sapper = { on:false, x:0, y:0, dir:1, swing:false };
+function updateSapper() {
+  sapper.swing = !!digAt;
+  if (!digAt) return;
+  // stand on the nearest floor at or below the dig point
+  const tx = Math.max(1, Math.min(W-3, digAt.x)); let fy = null;
+  for (let y=Math.floor(digAt.y); y<Math.floor(digAt.y)+8 && y<H-1; y++) { const x=Math.floor(tx); if (inB(x,y) && !SOLID[g[y*W+x]] && SOLID[g[(y+1)*W+x]]) { fy=y; break; } }
+  if (fy===null) fy = Math.floor(digAt.y)+2;
+  if (!sapper.on) { sapper.on=true; sapper.x=tx; sapper.y=fy; }
+  const dx = tx - sapper.x; if (Math.abs(dx)>.3) sapper.dir = Math.sign(dx);
+  sapper.x += Math.max(-.6, Math.min(.6, dx*.3)); sapper.y = fy;
+}
 function applyDig() {
   if (!digAt) return;
   const R=3.4*(1+.15*up.shovel), cx=digAt.x, cy=digAt.y; let any=false;
@@ -844,13 +938,14 @@ function applyDig() {
     hp[i] += 1 + (rand() < .45*up.shovel ? 1 : 0);
     if (hp[i] >= need) {
       game.dug++;
-      g[i]=E; hp[i]=0; any=true; if (tick%6===0 || isRock(t)) queueRockCheck(x,y,4);
+      g[i]=E; hp[i]=0; any=true; if (x>0) secret[i-1]=0; if (x<W-1) secret[i+1]=0; if (y>0) secret[i-W]=0; if (y<H-1) secret[i+W]=0; if (tick%6===0 || isRock(t)) queueRockCheck(x,y,4);
       if (t===GOLD) mineOre(x,y);
       if (rand()<.25) particles.push({x:x+.5,y:y+.5,vx:(rand()-.5)*.3,vy:-rand()*.3,life:20,max:20,k:'spark',dirt:1});
     }
   }
   if (any && tick-digSoundT>5) { digSoundT=tick; sfx.dig(); }
   digIdle = any ? 0 : digIdle+1;
+  for (const s of soldiers) if (s.tun && Math.hypot(s.x-cx, s.y-1-cy) < R+1.5) { s.hp = 0; s.revealed = true; }
   if (digIdle===40 && game.t-(applyDig.hinted||-99)>20) { applyDig.hinted=game.t; toast('Dig from the edge of open space — your tunnels, the chamber or the surface'); }
 }
 
@@ -887,7 +982,7 @@ function columnWeights() {
   if (colW && tick-colWTick < 60) return colW;
   const raw = new Float32Array(W);
   for (let x=0;x<W;x++) { let n=0; for (let y=SKY;y<H;y++) { const i=y*W+x, t=g[i];
-    if (t===HQ) n+=3; else if (t===CONC||t===TIMBER||t===PUMP||t===MG||t===DRILL||t===LAMP||prop[i]) n+=1; else if (t===E && y>surfOrig[x]+2) n+=.5; }
+    if (t===HQ||t===ROOM) n+=3; else if (t===CONC||t===TIMBER||t===PUMP||t===MG||t===DRILL||t===LAMP||prop[i]) n+=1; else if (t===E && y>surfOrig[x]+2) n+=.5; }
     raw[x]=n; }
   colW = new Float32Array(W);
   for (let x=0;x<W;x++) { let a=0; for (let k=-5;k<=5;k++) { const xx=x+k; if (xx>=0&&xx<W) a+=raw[xx]; } colW[x]=a; }   // spread a little either side
@@ -912,6 +1007,7 @@ const EVENTS = [
   { id:'rain',    w:2, after:90,  run(){ banner('STORM FRONT','FLOODING LIKELY — PUMPS READY'); rainUntil = game.t + 14 + game.intensity*3; sfx.rain(true); } },
   { id:'raid',    w:3, after:110,  run(){ banner('ENEMY RAID','INFANTRY ADVANCING'); game.raids++; const n=2+Math.round(game.intensity*1.6); for(let k=0;k<n;k++) schedule(2+k*1.4, ()=>spawnSoldier(rand()<.5?-1:1)); } },
   { id:'tremor',  w:1, after:180, run(){ banner('TREMOR','SHORE UP YOUR TUNNELS'); schedule(2, tremor); } },
+  { id:'tunnel',  w:2, after:150, run(){ game.tunnels=(game.tunnels||0)+1; const heard = rooms.some(r=>r.kind==='listen'); banner('FAINT DIGGING', heard ? 'YOUR LISTENING POST IS ON IT' : 'BUILD A LISTENING POST (ROOM) TO FIND THEM'); const n=1+Math.floor(game.intensity/2); for (let k=0;k<n;k++) schedule(1+k*5, ()=>spawnTunneller(drand()<.5?-1:1)); } },
   { id:'meteor',  w:1, after:240, run(){ banner('SOMETHING IN THE SKY','METEOR STRIKE'); schedule(2.5, ()=>spawnShell('meteor', pickX())); } },
 ];
 function tremor() {
@@ -923,15 +1019,16 @@ function updateDirector() {
   if (tut.on) { updateTutorial(); return; }
   game.intensity = 1 + game.t/110;
   for (let k=timers.length-1;k>=0;k--) if (game.t>=timers[k].at) { const f=timers[k].fn; timers.splice(k,1); f(); }
-  if (game.t >= game.harassAt) { spawnShell(game.t>200 && rand()<.3 ? 'howitzer':'light', pickX()); game.harassAt = game.t + Math.max(1.3, 6.5 - game.t/45)*(.6+rand()*.8); }
+  if (game.t >= game.harassAt) { spawnShell(game.t>200 && rand()<.3 ? 'howitzer':'light', pickX()); game.harassAt = game.t + Math.max(1.3, 6.5 - game.t/45)*(.6+drand()*.8); }
   if (game.t >= game.nextEvent) {
     const pool = EVENTS.filter(e=>game.t>=e.after);
-    let tw = pool.reduce((a,e)=>a+e.w,0), r=rand()*tw, ev=pool[0];
+    let tw = pool.reduce((a,e)=>a+e.w,0), r=drand()*tw, ev=pool[0];
     for (const e of pool) { r-=e.w; if (r<=0) { ev=e; break; } }
     ev.run(); game.events++;
+    for (const r of rooms) if (r.kind==='magazine') { gold += 40; popup(r.x+4, r.y-1, '+40'); }
     if (game.events===5 || (game.events>5 && game.events%6===5)) schedule(6, () => { banner('GIANT METEOR','IT\'S GOING TO LEAVE A HOLE'); schedule(2.5, ()=>spawnShell('giant', pickX())); });
     if (game.events>1) { gold += 15; schedule(9, ()=>toast('Held the line  +15 ◆')); }
-    game.nextEvent = game.t + Math.max(15, 38 - game.t/12) + rand()*6;
+    game.nextEvent = game.t + Math.max(15, 38 - game.t/12) + drand()*6;
   }
   if (game.t < rainUntil) rainTick(2+game.intensity); else if (sfx.raining) sfx.rain(false);
   if (rand()<.25) { const x=rand()*W|0, y=Math.floor(cam.y + rand()*viewRows()); if (y>SKY+100 && inB(x,y) && g[y*W+x]===E && bgc[y*W+x]) particles.push({x:x+.5,y,vx:(rand()-.5)*.03,vy:-.03,life:120,max:120,k:'glow'}); }
@@ -1004,7 +1101,8 @@ function render() {
         lit = 1 + L;
       } else {
         const i=y*W+x, t=g[i], v=sh[i]&7;
-        if (t===E) {
+        if (t===E && secret[i]) { R=palR[SOIL*8+v]; G=palG[SOIL*8+v]; B=palB[SOIL*8+v]; lit=amb+L; }
+        else if (t===E) {
           const w=bgc[i];
           if (prop[i]) { const pv=(x*3+y)%7===0; R=palR[TIMBER*8+v]-(pv?22:0); G=palG[TIMBER*8+v]-(pv?18:0); B=palB[TIMBER*8+v]-(pv?12:0); lit=amb+L; }
           else if (w===0) { const si = Math.min(y,SKYROWS-1)*W+x; R=skyR[si];G=skyG[si];B=skyB[si]; lit=1+L*.6; }
@@ -1063,6 +1161,20 @@ function drawEntities(s) {
     if (state!=='over' && tick%9===0) particles.push({x:x+w-2,y:y-4,vx:.02,vy:-.06,life:120,max:120,k:'smoke'});
     if (gn.hit>0) gn.hit--;
   }
+  // rooms
+  for (const r of rooms) {
+    const {x,y,w,h} = r;
+    if (r.kind==='hospital') { px(x,y,w,1,'#d8d0bc'); px(x+1,y+1,w-2,h-1,'#bfb59c'); px(x+3.5,y+1.5,1,3,'#b8302a'); px(x+2.5,y+2.5,3,1,'#b8302a'); px(x+w-2,y+h-3,1,3,'#3a3024'); }
+    else if (r.kind==='mine') { px(x+1,y,1,h,'#5a4026'); px(x+w-2,y,1,h,'#5a4026'); px(x+1,y,w-2,1,'#5a4026'); const a=tick*.1; px(x+w/2-.5+Math.cos(a)*1.5,y+1.5+Math.sin(a)*1.5,1,1,'#c9cdd2'); px(x+2,y+h-2,3,2,'#4a4a50'); px(x+2.5,y+h-2.5,2,1,'#d4a62a'); }
+    else if (r.kind==='magazine') { for (let k=0;k<3;k++) { px(x+1+k*2.3,y+2,2,3,'#6a5532'); px(x+1+k*2.3,y+2,2,1,'#3a2e1c'); } px(x+3,y,2,1,(tick>>4)&1?'#c0402a':'#802010'); }
+    else if (r.kind==='listen') { px(x+1,y,1,3,'#2a2826'); px(x,y+1,3,1,'#3a3834'); px(x+.5,y+2,2,1,'#9a8a60'); if (soldiers.some(s=>s.tun&&s.revealed) && (tick>>3)&1) px(x+1,y-1,1,1,'#ff4030'); }
+  }
+  // ghost for a room waiting to be placed
+  if (roomPending && roomGhost) { const st=stampFor(roomPending, roomGhost.x, roomGhost.y); for (const c of st.cells) { ctx.fillStyle = st.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); } }
+  // the player's sapper, swinging a pick where you dig
+  if (sapper.on && state==='play') { const x=Math.floor(sapper.x), y=sapper.y, sw=sapper.swing ? ((tick>>2)&1) : 0, f=sapper.dir>0;
+    px(x-.5,y-3,3,1,'#5c5a36'); px(x,y-2,2,1,'#c8a07a'); px(x,y-1,2,1,'#7a6a42'); px(x,y,1,1,'#4a3e28'); px(x+1,y,1,1,'#4a3e28');
+    const hx = f ? x+2 : x-1; px(hx, y-2-sw, 1, 1, '#6a5030'); px(hx+(f?1:-1)*(sw?0:1), y-3+sw*2, 1, 1, '#b0b4b8'); }
   // drills: rig, spinning bit, status
   ctx.textAlign='center';
   for (const d of drills) {
@@ -1077,6 +1189,9 @@ function drawEntities(s) {
     if (m.flash) px(mx+Math.cos(m.ang)*4.5-.5, my+Math.sin(m.ang)*4.5-.5, 2, 2, '#ffd36a');
   }
   for (const sd of soldiers) {
+    if (sd.tun) { if (!sd.revealed) continue; const x=Math.floor(sd.x), y=sd.y, sw=((sd.anim*4|0)&1);
+      px(x,y-3,2,1,'#2c2a26'); px(x,y-2,2,1,'#45463c'); px(x,y-1,2,1,'#3c3d34'); px(x,y,2,1,'#26251f'); px(x+(sd.dir>0?2:-1),y-2+sw,1,1,'#9a9a9a');
+      if (sd.fuse) { px(x+(sd.dir>0?-2:3),y,1,1,(tick>>3)&1?'#ff3020':'#601010'); } continue; }
     const x=Math.floor(sd.x), y=sd.y, walk=((sd.anim|0)&1);
     px(x,y-3,2,1,'#3d4436'); px(x,y-2,2,1,'#5c6650'); px(x+(sd.dir>0?1:0),y-2,1,1,'#b8906a');
     px(x,y-1,2,1,'#55604a'); px(x+walk,y,1,1,'#2c3226'); px(x+1-walk,y,1,1,'#3a4232');
@@ -1167,6 +1282,7 @@ const sfx = {
   dig() { this.nz(.05,'bandpass',500+Math.random()*400,.08,2); },
   coin() { const c=this.ctx; if (!c || Math.random()<.6) return; const o=c.createOscillator(), gn=c.createGain(), t=c.currentTime; o.type='square'; o.frequency.setValueAtTime(880,t); o.frequency.setValueAtTime(1320,t+.05); gn.gain.setValueAtTime(.03,t); gn.gain.exponentialRampToValueAtTime(.001,t+.15); o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t+.16); },
   crumble() { if (!this.ctx || this.ctx.currentTime-(this.lastCr||0)<.25) return; this.lastCr=this.ctx.currentTime; this.nz(.35,'lowpass',220,.25); },
+  tick() { const c=this.ctx; if (!c) return; const o=c.createOscillator(), gn=c.createGain(), t=c.currentTime; o.type='square'; o.frequency.value=1800; gn.gain.setValueAtTime(.04,t); gn.gain.exponentialRampToValueAtTime(.001,t+.04); o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t+.05); },
   thunk() { this.nz(.12,'lowpass',400,.35); },
   deny() { const c=this.ctx; if (!c) return; const o=c.createOscillator(), gn=c.createGain(), t=c.currentTime; o.type='square'; o.frequency.value=110; gn.gain.setValueAtTime(.05,t); gn.gain.exponentialRampToValueAtTime(.001,t+.18); o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t+.2); },
   rain(on) { const c=this.ctx; this.raining=on; if (!c) return;
@@ -1179,13 +1295,14 @@ function haptic(kind){ try { window.webkit.messageHandlers.haptic.postMessage(ki
 const $ = id => document.getElementById(id);
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toast.t); toast.t=setTimeout(()=>t.style.opacity=0, 2600); }
 const ICONS = {
+  room:['...##...','..####..','.######.','##.##.##','##.##.##','########','##....##','##....##'],
   upg:['...#....','..###...','.#####..','###.###.','...#....','...#....','...#....','........'],
   repair:['........','...##...','...##...','.######.','.######.','...##...','...##...','........'],
 };
 function drawIcon(cvs, id) {
   const c=cvs.getContext('2d'); c.clearRect(0,0,16,12);
   const mat = {prop:TIMBER,bags:BAGS,concrete:CONC,lamp:LAMP,pump:PUMP,mg:MG}[id];
-  if (ICONS[id]) { c.fillStyle = id==='upg' ? '#e6bf4a' : '#c0503a'; (ICONS[id]).forEach((row,y)=>[...row].forEach((ch,x)=>{ if(ch==='#') c.fillRect(x+4,y+2,1,1); })); return; }
+  if (ICONS[id]) { c.fillStyle = id==='upg' ? '#e6bf4a' : id==='room' ? '#d8d0bc' : '#c0503a'; (ICONS[id]).forEach((row,y)=>[...row].forEach((ch,x)=>{ if(ch==='#') c.fillRect(x+4,y+2,1,1); })); return; }
   const col = (t,v)=>`rgb(${palR[t*8+v]},${palG[t*8+v]},${palB[t*8+v]})`;
   if (id==='prop') { for(let x=2;x<14;x++){ c.fillStyle=col(TIMBER,(x*3)&7); c.fillRect(x,2,1,2); } for(let y=4;y<11;y++){ c.fillStyle=col(TIMBER,y&7); c.fillRect(2,y,1,1); c.fillRect(13,y,1,1);} }
   else if (id==='lamp') { c.fillStyle='#555'; c.fillRect(7,0,1,5); c.fillStyle='#ffe196'; c.fillRect(6,5,3,3); c.fillStyle='#ffe19633'; c.fillRect(3,4,9,7); }
@@ -1201,7 +1318,7 @@ function buildTray() {
     const el=document.createElement('div'); el.className='item'; el.dataset.id=it.id;
     const ic=document.createElement('canvas'); ic.width=16; ic.height=12; drawIcon(ic,it.id);
     el.append(ic); const b=document.createElement('b'); b.textContent=it.name; el.append(b);
-    const i=document.createElement('i'); i.textContent = it.kind==='draw' ? 'DRAW' : it.id==='upg' ? 'SHOP' : '◆'+it.cost; el.append(i);
+    const i=document.createElement('i'); i.textContent = it.kind==='draw' ? 'DRAW' : it.id==='upg' ? 'SHOP' : it.id==='room' ? 'BUILD' : '◆'+it.cost; el.append(i);
     tray.append(el);
   }
 }
@@ -1218,7 +1335,7 @@ function updateHUD() {
 
 // ---------- input
 const pointers = new Map();
-let drillTap = null, pendingAt = 0, gesture = null, ghostPos = null, dragItem = null, lastPan = 0, pinch = null;
+let roomGhost = null, drillTap = null, pendingAt = 0, gesture = null, ghostPos = null, dragItem = null, lastPan = 0, pinch = null;
 function pinchState(){ const ps=[...pointers.values()], a=ps[0], b=ps[1]||ps[0]; return { x:(a.x+b.x)/2, y:(a.y+b.y)/2, d:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)) }; }
 function toWorld(cx, cy){ return { x: cam.x + cx*dpr/scale, y: cam.y + cy*dpr/scale }; }
 const PAINT_R = 1.6, PAINT_COST = .5;   // ◆ per cell of drawn concrete
@@ -1258,6 +1375,7 @@ cv.addEventListener('pointerdown', e => {
   cam.vy = 0; cam.vx = 0;
   if (pointers.size>=2) { gesture='pan2'; digAt=null; drawAt=null; paintLast=null; pinch=pinchState(); return; }
   const w = toWorld(e.clientX,e.clientY);
+  if (roomPending) { gesture='room'; roomGhost=w; drillTap={ sx:e.clientX, sy:e.clientY }; return; }
   const dr = drillAt(w); if (dr) { gesture='drill'; drillTap={ d:dr, sx:e.clientX, sy:e.clientY }; return; }
   const gt = genAt(Math.floor(w.x), Math.floor(w.y)); if (gt) { gesture='gen'; drillTap={ gn:gt, sx:e.clientX, sy:e.clientY }; return; }
   gesture='pending'; pendingAt=performance.now();   // becomes a dig unless a second finger lands quickly
@@ -1279,6 +1397,7 @@ addEventListener('pointermove', e => {
     pinch = n;
   }
   else if (gesture==='dig') digAt = toWorld(e.clientX,e.clientY);
+  else if (gesture==='room') roomGhost = toWorld(e.clientX,e.clientY);
 });
 function endPointer(e) {
   if (dragItem) {
@@ -1290,6 +1409,7 @@ function endPointer(e) {
   }
   if (!pointers.has(e.pointerId)) return;
   if ((gesture==='drill'||gesture==='gen') && pointers.size===1 && e.type==='pointerup' && drillTap) { const p=pointers.get(e.pointerId); if (Math.hypot(p.x-drillTap.sx,p.y-drillTap.sy)<16) { if (drillTap.d) pressDrill(drillTap.d); else overcharge(drillTap.gn); } }
+  if (gesture==='room' && pointers.size===1 && e.type==='pointerup' && roomGhost) { if (place(roomPending, roomGhost.x, roomGhost.y)) roomPending=null; }
   pointers.delete(e.pointerId); pinch=null;
   if (gesture==='draw') { paintLast=null; paintConcrete.warned=false; drawAt=null; if (paintN) haptic('light'); paintN=0; }
   if (pointers.size===0) { if (performance.now()-lastPan>80) { cam.vy=0; cam.vx=0; } gesture=null; digAt=null; }
@@ -1305,22 +1425,30 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 
 // ---------- game flow
 function show(id, on){ $(id).hidden = !on; }
-function resetEntities(){ gens=[]; drills=[]; pumps=[]; mgs=[]; bodies.length=0; rockChecks.length=0; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
+function resetEntities(){ gens=[]; drills=[]; rooms=[]; roomPending=null; sapper.on=false; pumps=[]; mgs=[]; bodies.length=0; rockChecks.length=0; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
 function startDemo() {
   demo = true; state='menu'; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(true);
   game.t=0; cam.y = -10; cam.x = 0; cam.zoom = 1; demoStart = tick;
 }
 let demoStart=0;
+const todayKey = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const todayLabel = () => new Date().toLocaleDateString('en-GB', { day:'numeric', month:'short' }).toUpperCase();
+const dailySeed = key => { let h=2166136261; for (const ch of key) { h^=ch.charCodeAt(0); h=Math.imul(h,16777619); } return (h>>>0) % 1e9; };
+let drand = Math.random;   // drives the attack schedule; seeded on daily runs so everyone faces the same order
 function startGame(opts={}) {
   if (opts instanceof Event) opts = {};
   sfx.init(); sfx.rain(false);
   demo = false; resetEntities();
-  genWorld((Math.random()*1e9)|0); buildBase(false);
+  game.daily = opts.daily ? todayKey() : null;
+  const sd = game.daily ? dailySeed(game.daily) : (Math.random()*1e9)|0;
+  drand = game.daily ? mulberry(sd ^ 0x5eed) : Math.random;
+  genWorld(sd); buildBase(false);
   Object.assign(game, { t:0, tOffset:0, mined:0, kills:0, nextEvent:40, harassAt:60, intensity:1, events:0, meteors:0, raids:0, barrages:0, dug:0, props:0, drillTaps:0, concrete:0 });
   for (const k in up) up[k]=0;
+  for (const r of ROOMDEFS) ITEM[r.id].cost = ITEM[r.id].base;
   resetCapture(); gifJob++; gifBlob = null;
-  tut.on = !!opts.tutorial || localStorage.getItem('sapper.tut')!=='1'; tut.i=0; tut.moved=0; tut.sawUpg=false;
+  tut.on = !opts.daily && (!!opts.tutorial || localStorage.getItem('sapper.tut')!=='1'); tut.i=0; tut.moved=0; tut.sawUpg=false;
   gold = 140; ITEM.gen.cost = 100; drawMode = false; state='play';
   ['menu','help','over','pause'].forEach(s=>show(s,false)); show('hud',true); show('tray',true); show('mini',true);
   cam.zoom=1; cam.x=0; buildTray(); resize();
@@ -1343,12 +1471,12 @@ function gameOver() {
   show('tut',false); tut.on=false;
   const t=Math.floor(game.t), best = Math.max(game.best, t);
   game.best = best; localStorage.setItem('sapper.best', best);
-  const sc = scoreOf(), bestScore = Math.max(+(localStorage.getItem('sapper.bestScore')||0), sc), isBest = sc>=bestScore && sc>0;
-  localStorage.setItem('sapper.bestScore', bestScore);
+  const sc = scoreOf(), bk = game.daily ? 'sapper.daily.'+game.daily : 'sapper.bestScore', bestScore = Math.max(+(localStorage.getItem(bk)||0), sc), isBest = sc>=bestScore && sc>0;
+  localStorage.setItem(bk, bestScore);
   setTimeout(() => {
     const snap = document.createElement('canvas'); snap.width=cv.width; snap.height=cv.height; snap.getContext('2d').drawImage(cv,0,0);
     state='over'; sfx.rain(false);
-    $('overStats').innerHTML = `<div class="bigscore">${sc.toLocaleString()}</div><p>${isBest?'<em>NEW BEST SCORE</em>':'BEST '+bestScore.toLocaleString()}</p>`+
+    $('overStats').innerHTML = (game.daily?`<p><em>DAILY CHALLENGE · ${todayLabel()}</em></p>`:'')+`<div class="bigscore">${sc.toLocaleString()}</div><p>${isBest?'<em>NEW BEST'+(game.daily?' TODAY':' SCORE')+'</em>':'BEST '+(game.daily?'TODAY ':'')+bestScore.toLocaleString()}</p>`+
       `<p>HELD FOR <em>${fmtT(t)}</em></p><p><em>${game.meteors}</em> METEOR STRIKES · <em>${game.raids}</em> RAIDS · <em>${game.barrages}</em> BARRAGES</p><p><em>${game.kills}</em> RAIDERS STOPPED · <em>◆${game.mined.toLocaleString()}</em> MINED</p>`;
     buildShareCard(snap, sc, t);
     buildShareGif(sc, t);
@@ -1434,6 +1562,7 @@ function drawCardOverlay(x, sc, t) {
   x.imageSmoothingEnabled=false; x.drawImage($('title'), 0,0,96,26, GIF_W/2-96*k, 12*k, 192*k, 52*k);
   const gr=x.createLinearGradient(0,T-60*k,0,T); gr.addColorStop(0,'#0d0a0700'); gr.addColorStop(1,'#0d0a07'); x.fillStyle=gr; x.fillRect(0,T-60*k,GIF_W,60*k);
   x.fillStyle='#0d0a07'; x.fillRect(0,T,GIF_W,GIF_H-T);
+  if (game.daily) { x.textAlign='center'; x.fillStyle='#f0d68a'; x.font=`800 ${12*k}px ${mono}`; x.fillText(`DAILY CHALLENGE · ${todayLabel()}`, GIF_W/2, 76*k); }
   x.textAlign='center'; x.fillStyle='#cdb98a'; x.font=`700 ${13*k}px ${mono}`; x.fillText('I HELD THE LINE FOR', GIF_W/2, T+10*k);
   x.fillStyle='#f0d68a'; x.font=`900 ${40*k}px ${mono}`; x.fillText(fmtT(t), GIF_W/2, T+48*k);
   x.fillStyle='#e6bf4a'; x.font=`900 ${20*k}px ${mono}`; x.fillText(`SCORE ${sc.toLocaleString()}`, GIF_W/2, T+76*k);
@@ -1489,7 +1618,7 @@ function buildShareCard(snap, sc, t) {
   x.font=`800 34px ${mono}`; rows.forEach(([n,l],k)=>{ const yy=1060+k*46; x.textAlign='right'; x.fillStyle='#f0d68a'; x.fillText(String(n),330,yy); x.textAlign='left'; x.fillStyle='#d8c9a3'; x.fillText(l,360,yy); });
   x.textAlign='center'; x.fillStyle='#cdb98a'; x.font=`800 32px ${mono}`; x.fillText('CAN YOU HOLD THE LINE?', 540, 1285);
   x.fillStyle='#8a7a5a'; x.font=`700 26px ${mono}`; x.fillText(SHARE_URL.replace('https://',''), 540, 1325);
-  shareText = `I held the line for ${fmtT(t)} in SAPPER — survived ${game.meteors} meteor strike${game.meteors===1?'':'s'} and ${game.raids} wave${game.raids===1?'':'s'} of raiders. Score ${sc.toLocaleString()}. Can you beat it? ${SHARE_URL}`;
+  shareText = (game.daily ? `SAPPER daily challenge (${todayLabel()}): ` : '') + `I held the line for ${fmtT(t)} in SAPPER — survived ${game.meteors} meteor strike${game.meteors===1?'':'s'} and ${game.raids} wave${game.raids===1?'':'s'} of raiders. Score ${sc.toLocaleString()}. Can you beat it? ${SHARE_URL}`;
   shareCardUrl = c.toDataURL('image/png'); $('sharePreview').src = shareCardUrl;
   shareBlob = null; c.toBlob(b => { shareBlob = b; }, 'image/png');
 }
@@ -1513,13 +1642,17 @@ async function shareScore() {
 
 function pause(){ if (state!=='play') return; state='paused'; show('pause',true); }
 function resume(){ state='play'; show('pause',false); last=performance.now(); }
-function toMenu(){ ['over','pause','help','hud','tray','mini','tut','upg'].forEach(s=>show(s,false)); show('menu',true); updateBest(); startDemo(); resize(); }
-function updateBest(){ const b=game.best, bs=+(localStorage.getItem('sapper.bestScore')||0); $('bestStat').textContent = b ? `BEST SCORE ${bs.toLocaleString()} · HELD ${fmtT(b)}` : ''; }
+function toMenu(){ ['over','pause','help','hud','tray','mini','tut','upg','roomsScr'].forEach(s=>show(s,false)); show('menu',true); updateBest(); startDemo(); resize(); }
+function updateBest(){ const b=game.best, bs=+(localStorage.getItem('sapper.bestScore')||0); $('bestStat').textContent = b ? `BEST SCORE ${bs.toLocaleString()} · HELD ${fmtT(b)}` : '';
+  const ds=+(localStorage.getItem('sapper.daily.'+todayKey())||0); $('dailyStat').textContent = `TODAY (${todayLabel()}): ` + (ds ? `BEST ${ds.toLocaleString()}` : 'NOT PLAYED YET'); }
 $('startBtn').onclick = () => startGame();
 $('campBtn').onclick = () => startGame({ tutorial:true });
 $('tutSkip').onclick = () => { endTutorial(false); toast('Tutorial skipped — good luck'); };
 $('shareBtn').onclick = shareScore;
 $('upgClose').onclick = () => { show('upg',false); state='play'; last=performance.now(); tut.sawUpg = true; };
+$('roomList').addEventListener('click', e => { const b=e.target.closest('button[data-room]'); if (b) chooseRoom(b.dataset.room); });
+$('roomClose').onclick = () => { show('roomsScr',false); state='play'; last=performance.now(); };
+$('dailyBtn').onclick = () => startGame({ daily:true });
 $('upgList').addEventListener('click', e => { const b=e.target.closest('button[data-up]'); if (b) buyUpgrade(b.dataset.up); });
 $('helpBtn').onclick = () => { show('menu',false); show('help',true); };
 $('helpBack').onclick = () => { show('help',false); if (state==='menu') show('menu',true); else show('pause',true); };
@@ -1554,8 +1687,8 @@ function update() {
   if (tick%6===0) processRockChecks();
   updateBodies();
   updateShells(); updateSoldiers(); updateMachines(); updateParticles();
-  updateGens(); updateDrills();
-  if (state==='play') { game.t += 1/60; applyDig(); updateDirector(); }
+  updateGens(); updateDrills(); updateRooms();
+  if (state==='play') { game.t += 1/60; applyDig(); updateSapper(); updateDirector(); }
   else if (state==='menu') { game.t += 1/60; updateDemo(); if (tick-demoStart > 60*75) startDemo(); }
   else if (state==='dying') game.t += 1/60;
   shake *= .88; if (shake<.2) shake=0;
@@ -1577,7 +1710,7 @@ function frame(now) {
   if ((state==='play'||state==='dying') && ++capTick % 8 === 0) captureFrame();
   if (state==='play') { updateHUD(); if (++frameN % 12 === 0) renderMini(); }
 }
-window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, tut, up, get shareText(){return shareText;}, get gifBlob(){return gifBlob;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
+window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, get rooms(){return rooms;}, spawnTunneller, get secretCount(){ return secret.reduce((a,v)=>a+v,0); }, get daily(){return game.daily;}, tut, up, get shareText(){return shareText;}, get gifBlob(){return gifBlob;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
 updateBest(); startDemo(); resize(); requestAnimationFrame(frame);
 if ('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
