@@ -517,7 +517,7 @@ function footprints() {
   // `floor` is the row people stand on: under a room, or the concrete pad of a generator bay
   for (const r of rooms) f.push(r.bay ? { x0:r.x-1, y0:r.y-2, x1:r.x+r.w, y1:r.y+r.h, floor:r.y+r.h } : { x0:r.x, y0:r.y, x1:r.x+r.w-1, y1:r.y+r.h-1, floor:r.y+r.h });
   for (const gn of gens) f.push({ x0:gn.x-2, y0:gn.y-4, x1:gn.x+gn.w+1, y1:gn.y+gn.h, floor:gn.y+gn.h });
-  for (const st of sites) f.push({ x0:st.x0, y0:st.y0, x1:st.x1, y1:st.y1, floor: st.id==='gen' ? st.y1 : st.y1+1 });
+  for (const st of sites) f.push({ x0:st.x0, y0:st.y0, x1:st.x1, y1:st.y1, floor: st.y1 });
   return f;
 }
 // a construction site can be laid over open space or solid earth; the miners dig it out first
@@ -526,7 +526,7 @@ function siteStamp(id, cx, cy) {
   let x0=Math.round(cx-w/2), y0=Math.round(cy-h/2), snapped=false;
   const fp = footprints();
   // line up floors with the nearest neighbour that's roughly level
-  const myFloor = id==='gen' ? h-1 : h; let best=null, bd=1e9;
+  const myFloor = h-1; let best=null, bd=1e9;   // every bay stands on its own concrete pad (bottom row)
   for (const nb of fp) if (Math.abs(y0+myFloor-nb.floor)<=3) { const gap = x0>nb.x1 ? x0-nb.x1 : nb.x0>x0+w-1 ? nb.x0-(x0+w-1) : 0; if (gap<40 && gap<bd) { bd=gap; best=nb; } }
   if (best) { y0 = best.floor - myFloor; snapped=true; }
   for (const nb of fp) if (y0<=nb.y1 && y0+h-1>=nb.y0) {                                                                                 // butt up against neighbours
