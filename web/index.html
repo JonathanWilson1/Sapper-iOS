@@ -300,7 +300,7 @@ function buildBase(isDemo) {
   frame(41+O,89+O,fy-11,fy-1,[41+O,52+O,77+O,89+O]);
   place('lamp', 47+O, fy-9, true); place('lamp', 84+O, fy-9, true); place('lamp', 34+O, s34+12, true);
   place('drill', 83+O, fy-2, true);  // lands between the right-hand posts
-  place('miners', 49+O, fy-4, true);   // the starting crew lives between the shaft and the generator
+  fillRect(41+O, fy-7, 16, 7, ROOM); rooms.push({ kind:'miners', x:41+O, y:fy-7, w:16, h:7, fresh:true });   // the starting crew lives between the shaft and the generator
   // a gold vein to teach mining, just off the chamber
   for (let y=fy-8;y<fy;y++) for (let x=90+O;x<102+O;x++) if (hash2(x,y,seed+5)<.55) setCell(x,y, hash2(x,y,seed+6)<.45?GOLD:ROCK);
   if (isDemo) {
@@ -443,15 +443,17 @@ function renderUpgrades() {
 function openUpgrades(){ if (state!=='play') return; state='paused'; renderUpgrades(); show('upg',true); }
 
 // ---------- rooms: dig a space, drop one in; each works on its own
+const BAY_W = GEN_W+4, BAY_H = GEN_H+5;   // every building sits in the same timber bay
 const ROOMDEFS = [
-  { id:'gen',      name:'GENERATOR',      desc:'Earns ◆. Keep them 30+ cells apart; shallow pays most', cost:100, w:GEN_W+4, h:GEN_H+5 },
-  { id:'pump',     name:'PUMP',           desc:'Drains floodwater nearby',                 cost:40,  w:4, h:3 },
-  { id:'miners',   name:'MINERS\' HUT',    desc:'3 more miners to dig what you mark',        cost:100, w:16, h:7 },
-  { id:'hospital', name:'FIELD HOSPITAL', desc:'A medic carries wounded miners in and treats them. Also patches up nearby generators', cost:80,  w:16, h:7 },
-  { id:'mine',     name:'MINE HEAD',      desc:'Ore dug within 30 cells pays 50% more',     cost:90,  w:16, h:7 },
-  { id:'magazine', name:'MAGAZINE',       desc:'Pays ◆40 every wave — explodes if hit',    cost:50,  w:16, h:7 },
-  { id:'listen',   name:'LISTENING POST', desc:'Hears enemy tunnellers within 90 cells',   cost:40,  w:3, h:3 },
+  { id:'gen',      name:'GENERATOR',      desc:'Earns ◆. Keep them 30+ cells apart; shallow pays most', cost:100 },
+  { id:'pump',     name:'PUMP',           desc:'Drains floodwater nearby',                 cost:40 },
+  { id:'miners',   name:'MINERS\' HUT',    desc:'3 more miners to dig what you mark',        cost:100 },
+  { id:'hospital', name:'FIELD HOSPITAL', desc:'A medic carries wounded miners in and treats them. Also patches up nearby generators', cost:80 },
+  { id:'mine',     name:'MINE HEAD',      desc:'Ore dug within 30 cells pays 50% more',     cost:90 },
+  { id:'magazine', name:'MAGAZINE',       desc:'Pays ◆40 every wave — explodes if hit',    cost:50 },
+  { id:'listen',   name:'LISTENING POST', desc:'Hears enemy tunnellers within 90 cells',   cost:40 },
 ];
+for (const r of ROOMDEFS) { r.w = BAY_W; r.h = BAY_H; }
 let roomPending = null;
 function openRooms(){ if (state!=='play') return; state='paused'; $('roomGold').textContent='◆ '+gold;
   $('roomList').innerHTML = ROOMDEFS.map(r => `<div class="uprow"><div><b>${r.name}</b><small>${r.desc}</small></div><button data-room="${r.id}" ${gold<ITEM[r.id].cost?'style="opacity:.5"':''}>◆${ITEM[r.id].cost}</button></div>`).join('');
@@ -513,7 +515,7 @@ function dropRect(cx,cy,w,h,t){ let best=rectCells(cx,cy,w,h,t);
 function footprints() {
   const f=[];
   // `floor` is the row people stand on: under a room, or the concrete pad of a generator bay
-  for (const r of rooms) f.push({ x0:r.x, y0:r.y, x1:r.x+r.w-1, y1:r.y+r.h-1, floor:r.y+r.h });
+  for (const r of rooms) f.push(r.bay ? { x0:r.x-1, y0:r.y-2, x1:r.x+r.w, y1:r.y+r.h, floor:r.y+r.h } : { x0:r.x, y0:r.y, x1:r.x+r.w-1, y1:r.y+r.h-1, floor:r.y+r.h });
   for (const gn of gens) f.push({ x0:gn.x-2, y0:gn.y-4, x1:gn.x+gn.w+1, y1:gn.y+gn.h, floor:gn.y+gn.h });
   for (const st of sites) f.push({ x0:st.x0, y0:st.y0, x1:st.x1, y1:st.y1, floor: st.id==='gen' ? st.y1 : st.y1+1 });
   return f;
@@ -541,6 +543,11 @@ function siteStamp(id, cx, cy) {
     if (id==='gen') {   // posts and a two-row beam round the edge, an open bay, the dynamo, a concrete pad
       const lx=x-x0, ly=y-y0;
       ct = ly===h-1 ? CONC : (ly<2 || lx===0 || lx===w-1) ? PROPBG : (lx>=2 && lx<w-2 && ly>=h-1-GEN_H) ? HQ : E;   // headroom between beam and engine, like the starting chamber
+    } else {            // same bay for everything else: the room fills the inside; a pump sits in the middle on the pad
+      const lx=x-x0, ly=y-y0;
+      ct = ly===h-1 ? CONC : (ly<2 || lx===0 || lx===w-1) ? PROPBG
+         : id==='pump' ? ((lx>=w/2-2 && lx<w/2+2 && ly>=h-4) ? PUMP : E)
+         : ROOM;
     }
     const c=[x,y,ct];
     if (!inB(x,y)) { c.ok=false; ok=false; cells.push(c); continue; }
@@ -592,11 +599,15 @@ function commitStructure(id, cells) {
     if (c[2]===PROPBG) { if (!SOLID[t]) prop[i]=1; }
     else if (t===E||t===WATER||t===FIRE||t===RUBBLE||t===SAND) setCell(c[0],c[1],c[2]); }
   const c=cells[0], it=ITEM[id];
-  if (id==='pump') pumps.push({ x:c[0], y:c[1], spin:0 });
+  if (id==='pump') { const m = cells.find(q=>q[2]===PUMP) || c; pumps.push({ x:m[0], y:m[1], spin:0 }); }
   if (id==='mg')   mgs.push({ x:c[0], y:c[1], cool:0, ang:-Math.PI/2, flash:0 });
   if (id==='gen') { const m = cells.find(q=>q[2]===HQ) || c; addGen(m[0],m[1]); }
   if (id==='drill') drills.push({ x:c[0], y:c[1], rem:0, work:0 });
-  if (it && it.kind==='room' && id!=='gen' && id!=='pump') rooms.push({ kind:id, x:c[0], y:c[1], w:it.w, h:it.h, fresh:id==='miners' });
+  if (it && it.kind==='room' && id!=='gen' && id!=='pump') {
+    const rc = cells.filter(q=>q[2]===ROOM); const src = rc.length ? rc : cells;
+    let x0=1e9,y0=1e9,x1=-1,y1=-1; for (const q of src) { x0=Math.min(x0,q[0]); y0=Math.min(y0,q[1]); x1=Math.max(x1,q[0]); y1=Math.max(y1,q[1]); }
+    rooms.push({ kind:id, x:x0, y:y0, w:x1-x0+1, h:y1-y0+1, fresh:id==='miners', bay: rc.length>0 && rc.length<cells.length });
+  }
 }
 // board up the gap between a new room and the tunnel ceiling so tunnels stay neat
 function backfillAbove(cells) {
@@ -1444,12 +1455,17 @@ function drawEntities(s) {
   // rooms: lit interiors with little people at work
   for (const r of rooms) {
     const {x,y,w,h} = r, fl = y+h-1;
-    if (r.kind==='listen') { px(x+1,y,1,3,'#2a2826'); px(x,y+1,3,1,'#3a3834'); px(x+.5,y+2,2,1,'#9a8a60'); if (soldiers.some(s2=>s2.tun&&s2.revealed) && (tick>>3)&1) px(x+1,y-1,1,1,'#ff4030'); continue; }
     px(x,y,w,h,'#2e271e'); px(x,y,w,1,'#4a3a26'); px(x,fl,w,1,'#1c1712'); px(x,y,1,h,'#3a2e1e'); px(x+w-1,y,1,h,'#3a2e1e');   // walls, beam, floor
     px(x+w/2,y+1,1,1,(tick>>5)%9?'#ffe196':'#c8a860');                                                                    // hanging lamp
     if (r.kind==='miners') { for (let k=0;k<2;k++) { px(x+2,y+2+k*2,5,.7,'#6a5032'); px(x+2,y+1.5+k*2,5,.5,'#a89a78'); } for (let k=0;k<3;k++) { px(x+w-3-k*1.6,y+2,.4,3,'#6a5030'); px(x+w-3.6-k*1.6,y+2,1.6,.5,'#b0b4b8'); } px(x+8,fl-1,2,1,'#4a4a50'); const crew=diggers.filter(d=>d.hut===r).length; for (let k=0;k<DIGGERS_PER_HUT;k++) px(x+9+k*1.4,y+1.4,.8,.8,k<crew?'#9fd07a':'#5a2a20'); continue; }
     if (!r.people) r.people = [0,1,2].map(k => ({ x: 2+k*5, dir: k%2?-1:1, wait: k*40, carry: false }));
-    if (r.kind==='hospital') {
+    if (r.kind==='listen') {
+      px(x+2,fl-2,6,.6,'#6a5032'); px(x+2.5,fl-1.4,.4,1.4,'#4a3a26'); px(x+7,fl-1.4,.4,1.4,'#4a3a26');                    // desk
+      px(x+4,fl-3,2,1,'#3a3834'); px(x+4.5,fl-3.6,1,.6,'#9a8a60');                                                          // geophone set
+      px(x+9,fl-3,1,1,'#c8a07a'); px(x+8.8,fl-3.3,1.4,.4,'#2a2826'); px(x+9,fl-2,1,2,'#6b6a3e');                          // operator with headphones
+      for (let k=0;k<3;k++) px(x+12+k*.8, y+3+((tick>>3)+k)%3*.3, .5, 2-k*.4, '#7ee06a');                                  // trace on the scope
+      if (soldiers.some(s2=>s2.tun&&s2.revealed) && (tick>>3)&1) px(x+w-3,y+2,1,1,'#ff4030');
+    } else if (r.kind==='hospital') {
       px(x+2,y+1.5,3,1.6,'#d8d0bc'); px(x+3,y+1.6,1,1.4,'#b8302a'); px(x+2.6,y+2,1.8,.6,'#b8302a');                        // red cross banner
       for (let k=0;k<3;k++) { const bx=x+6+k*3.3; px(bx,fl-1,3,1,'#d8d0bc'); px(bx,fl,.6,1,'#5a5040'); px(bx+2.4,fl,.6,1,'#5a5040'); px(bx+.2,fl-1.6,.9,.8,'#c8a07a'); }  // beds + patients
     } else if (r.kind==='mine') {
