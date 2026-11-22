@@ -1760,20 +1760,24 @@ const GIF_W = 720, GIF_H = 900, GIF_TOP = 580, CAP_N = 40;
 const capRing = []; let capHead = 0, capCount = 0, lastFocusY = null;
 function captureFrame() {
   // one sample per world cell: tiny to store, and scaled back up with hard edges it stays crisp pixel art
-  const cw = Math.round(cv.width/scale), ch = Math.round(cw*GIF_TOP/GIF_W);
+  const cw = Math.round(cv.width/scale) - 1, ch = Math.round(cw*GIF_TOP/GIF_W);   // one cell narrower than the screen so every column is a whole cell
   if (!capRing.length) for (let k=0;k<CAP_N;k++) capRing.push(document.createElement('canvas'));
   const c = capRing[capHead]; if (c.width!==cw || c.height!==ch) { c.width=cw; c.height=ch; }
   const x = c.getContext('2d');
   // aim at the action: the latest big blast if there is one, otherwise the nearest generator
   let fy = null; for (const f of flashes) if (f.r > 20) fy = f.y;
   if (fy===null) { const mid = cam.y + viewRows()*.4; let bd=1e9; for (const gn of gens) { const d=Math.abs(gn.y-mid); if (d<bd) { bd=d; fy=gn.y+3; } } }
-  if (fy===null) fy = lastFocusY; else lastFocusY = fy;
-  const sh2 = cv.width * GIF_TOP / GIF_W, cy = fy===null ? cv.height*.38 : (fy - cam.y)*scale;
-  const sy = Math.max(0, Math.min(cv.height - trayPx - sh2, cy - sh2*.45));
-  x.imageSmoothingEnabled = false; x.drawImage(cv, scale/2, sy+scale/2, cv.width, sh2, 0, 0, cw, ch);
+  // ease the aim so the replay doesn't jump between targets
+  if (fy!==null) lastFocusY = lastFocusY===null ? fy : lastFocusY + (fy-lastFocusY)*.2;
+  const sh2 = ch*scale, cy = lastFocusY===null ? cv.height*.38 : (lastFocusY - cam.y)*scale;
+  let sy = Math.max(0, Math.min(cv.height - trayPx - sh2, cy - sh2*.45));
+  // snap the crop to the world's cell grid and sample each cell at its centre, so pixels don't shimmer frame to frame
+  const ox = (((-cam.x)%1)+1)%1*scale, oy = (((-cam.y)%1)+1)%1*scale;
+  sy = oy + Math.round((sy-oy)/scale)*scale;
+  x.imageSmoothingEnabled = false; x.drawImage(cv, ox + scale/2, sy + scale/2, cw*scale, sh2, 0, 0, cw, ch);
   capHead = (capHead+1) % CAP_N; capCount = Math.min(CAP_N, capCount+1);
 }
-function resetCapture(){ capHead = 0; capCount = 0; }
+function resetCapture(){ capHead = 0; capCount = 0; lastFocusY = null; }
 
 // GIF89a encoder (LZW). The 256-colour palette is built from the replay itself: the most common colours
 // (pixel art uses few) plus the card's text colours, so the dirt and rock keep their real tones.
@@ -1840,7 +1844,7 @@ function drawCardOverlay(x, sc, t) {
   x.fillStyle='#cdb98a'; x.font=`800 ${13*k}px ${mono}`; x.fillText('CAN YOU HOLD THE LINE?', GIF_W/2, T+130*k);
   x.fillStyle='#8a7a5a'; x.font=`700 ${11*k}px ${mono}`; x.fillText(SHARE_URL.replace('https://',''), GIF_W/2, T+150*k);
 }
-let gifBlob = null, gifJob = 0, capTick = 0, capThis = false;
+let gifBlob = null, gifJob = 0, capThis = false, lastCapAt = 0;
 function buildShareGif(sc, t) {
   const job = ++gifJob; gifBlob = null;
   const n = capCount; if (n < 4) return;
@@ -1857,7 +1861,7 @@ function buildShareGif(sc, t) {
   const btn = $('shareBtn'); let k = 0;
   const step = () => {
     if (job !== gifJob) return;
-    gifFrame(w, GIF_W, GIF_H, gifIndex(compose(order[k])), k===order.length-1 ? 250 : 13);
+    gifFrame(w, GIF_W, GIF_H, gifIndex(compose(order[k])), k===order.length-1 ? 250 : 12);
     k++; btn.textContent = `Making GIF… ${Math.round(k/order.length*100)}%`;
     if (k < order.length) setTimeout(step, 0);
     else { w.byte(0x3B); gifBlob = new Blob([w.bytes()], { type:'image/gif' }); $('sharePreview').src = URL.createObjectURL(gifBlob); btn.textContent = 'Share My Score'; }
@@ -2005,9 +2009,9 @@ function frame(now) {
   if (gesture==='pending' && pointers.size===1 && performance.now()-pendingAt>70) { gesture = drawMode ? 'draw' : 'dig'; if (gesture==='dig') { const p0=[...pointers.values()][0], w0=toWorld(p0.x,p0.y), x0=Math.floor(w0.x), y0=Math.floor(w0.y); markErase = inB(x0,y0) && !!mark[y0*W+x0]; } }
   if (gesture==='draw') { const p=[...pointers.values()][0]; if (p) { drawAt=toWorld(p.x,p.y); paintConcrete(drawAt); } }
   if (gesture==='dig') { const p=[...pointers.values()][0]; if (p) digAt=toWorld(p.x,p.y); }
-  capThis = (state==='play'||state==='dying') && (capTick+1) % 8 === 0;   // frames for the replay skip text labels
+  capThis = (state==='play'||state==='dying') && now - lastCapAt >= 120;   // a steady ~8 fps whatever the screen's refresh rate; these frames skip text labels
   render();
-  if ((state==='play'||state==='dying') && ++capTick % 8 === 0) captureFrame();
+  if (capThis) { lastCapAt = now; captureFrame(); }
   if (state==='play') { updateHUD(); if (++frameN % 12 === 0) renderMini(); }
 }
 window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, get sites(){return sites;}, get diggers(){return diggers;}, mark, get rooms(){return rooms;}, spawnTunneller, get secretCount(){ return secret.reduce((a,v)=>a+v,0); }, get daily(){return game.daily;}, tut, up, get shareText(){return shareText;}, get gifBlob(){return gifBlob;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
