@@ -1387,11 +1387,13 @@ function render() {
   for (const f of flashes) addLight(f.x,f.y,f.r,1.8*f.life/f.max,y0,rows);
   for (const f of flares) addLight(f.x,f.y,46,.55,y0,rows);
   for (const m of mgs) if (m.flash) addLight(m.x+2.5,m.y,10,.8,y0,rows);
+  for (const d of diggers) if (!d.down) addLight(d.fx+.5,d.fy-3,8,.4,y0,rows);   // helmet lamps
+  for (const m of medics) addLight(m.fx+.5,m.fy-3,6,.3,y0,rows);
   for (const sh2 of shells) if (isMet(sh2.kind)) addLight(sh2.x,sh2.y,16,1.2,y0,rows);
   const tk = tick;
   for (let r=0;r<rows;r++) {
     const y=y0+r, rr=r*W;
-    const amb = y < SKY+6 ? .78 : Math.max(.16, .62 - (y-SKY-6)*.0028);
+    const amb = y < SKY+6 ? .78 : Math.max(.34, .66 - (y-SKY-6)*.0016);   // gets darker with depth, but never too dark to read
     for (let x=0;x<W;x++) {
       let R,G,B, L=light[rr+x], lit;
       if (y<0 || y>=H) {
@@ -1405,7 +1407,7 @@ function render() {
           if (ladder[i]) { const rung=ladder[i]===2; R=rung?112:132; G=rung?80:94; B=rung?46:54; lit=amb+L; }
           else if (prop[i]) { const pv=(x*3+y)%7===0; R=palR[TIMBER*8+v]-(pv?22:0); G=palG[TIMBER*8+v]-(pv?18:0); B=palB[TIMBER*8+v]-(pv?12:0); lit=amb+L; }
           else if (w===0) { const si = Math.min(y,SKYROWS-1)*W+x; R=skyR[si];G=skyG[si];B=skyB[si]; lit=1+L*.6; }
-          else { const c=WALL[w], o=(v-3.5)*1.6; R=c[0]+o;G=c[1]+o;B=c[2]+o; lit = amb*.55 + L; }
+          else { const c=WALL[w], o=(v-3.5)*1.6; R=c[0]+o;G=c[1]+o;B=c[2]+o; lit = amb*.7 + L; }
         } else if (t===FIRE) {
           const f=(sh[i]+tk*7)&31; R=255; G=90+f*4; B=20+(f>24?80:0); lit=1;
         } else if (t===WATER) {
