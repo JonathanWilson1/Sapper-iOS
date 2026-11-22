@@ -66,9 +66,14 @@ final class Haptics: NSObject, WKScriptMessageHandler {
         var items: [Any] = []
         if let dataURL = body["image"] as? String,
            let comma = dataURL.firstIndex(of: ","),
-           let data = Data(base64Encoded: String(dataURL[dataURL.index(after: comma)...])),
-           let image = UIImage(data: data) {
-            items.append(image)
+           let data = Data(base64Encoded: String(dataURL[dataURL.index(after: comma)...])) {
+            if dataURL.hasPrefix("data:image/gif") {
+                // share animated GIFs as a file so they stay animated
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("sapper-score.gif")
+                if (try? data.write(to: url)) != nil { items.append(url) }
+            } else if let image = UIImage(data: data) {
+                items.append(image)
+            }
         }
         if let text = body["text"] as? String { items.append(text) }
         guard !items.isEmpty,

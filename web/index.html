@@ -108,7 +108,7 @@
   <div class="card">
     <h2>FIELD MANUAL</h2>
     <p><em>Two fingers</em> scroll and pinch to zoom.</p>
-    <p><em>One finger digs</em> anywhere you drag. Rock is slow. Gold ore pays ◆.</p>
+    <p><em>One finger digs</em> — start at the edge of open space (a tunnel, the chamber or the surface) and drag into the earth. Rock is slow. Gold ore pays ◆.</p>
     <p>Wide caverns cave in. Undercut a rock and it drops in one piece.</p>
     <p><em>GENERATORs</em> earn ◆. Keep them 30+ cells apart or they share output. Shallow ones pay most but sit under the shells.</p>
     <p><em>THE GLOW</em>: gas shells and buried munitions from the last war leaked deep into the earth. The deeper a generator sits, the more the Glow saps it.</p>
@@ -832,7 +832,7 @@ function updateParticles() {
 function popup(x,y,txt){ popups.push({x,y,txt,life:60}); }
 
 // ---------- digging
-let digAt = null, digSoundT = 0;
+let digAt = null, digSoundT = 0, digIdle = 0;
 function applyDig() {
   if (!digAt) return;
   const R=3.4*(1+.15*up.shovel), cx=digAt.x, cy=digAt.y; let any=false;
@@ -840,6 +840,7 @@ function applyDig() {
     if (!inB(x,y) || (x+.5-cx)**2+(y+.5-cy)**2 > R*R) continue;
     const i=y*W+x, t=g[i], need=DIGT[t];
     if (!need) continue;
+    if (!((x>0&&!SOLID[g[i-1]]) || (x<W-1&&!SOLID[g[i+1]]) || (y>0&&!SOLID[g[i-W]]) || (y<H-1&&!SOLID[g[i+W]]))) continue;   // dig from an open face
     hp[i] += 1 + (rand() < .45*up.shovel ? 1 : 0);
     if (hp[i] >= need) {
       game.dug++;
@@ -849,13 +850,15 @@ function applyDig() {
     }
   }
   if (any && tick-digSoundT>5) { digSoundT=tick; sfx.dig(); }
+  digIdle = any ? 0 : digIdle+1;
+  if (digIdle===40 && game.t-(applyDig.hinted||-99)>20) { applyDig.hinted=game.t; toast('Dig from the edge of open space — your tunnels, the chamber or the surface'); }
 }
 
 // ---------- boot camp: a guided first game you can skip
 const tut = { on:false, i:0, t0:0, moved:0 };
 const TUT = [
   { text:'Use <em>two fingers</em> to scroll around and <em>pinch</em> to zoom. Take a look around your bunker.', done:()=>tut.moved>60 },
-  { text:'<em>One finger digs</em>. Drag through the earth next to your generator to cut a tunnel.', done:()=>game.dug>=120, mark:()=>({x:gens[0].x-10,y:gens[0].y+3}) },
+  { text:'<em>One finger digs</em> from the edge of open space. Start inside the chamber by the ring and drag into the earth.', done:()=>game.dug>=120, mark:()=>({x:gens[0].x-14,y:gens[0].y+3}) },
   { text:'Bright yellow specks are <em>gold ore</em>. Dig into the vein to the right of the chamber.', done:()=>game.mined>=25, mark:()=>({x:gens[0].x+38,y:gens[0].y+3}) },
   { text:'Wide tunnels cave in. Drag a <em>PROP</em> up out of the tray and drop it into your tunnel.', done:()=>game.props>=1 },
   { text:'Tap the <em>DRILL</em> to bore 20 cells straight down for ◆10. It mines any ore it passes.', done:()=>game.drillTaps>=1, mark:()=>drills[0]&&({x:drills[0].x+3,y:drills[0].y+2}) },
@@ -904,7 +907,7 @@ function maybeBuster() {
   schedule(3+rand()*3, () => { banner('BUNKER BUSTER','CONCRETE WON\'T SAVE YOU'); const sh=spawnShell('buster', best+.5); sh.vx=0; sh.pen = 30 + bestN*6; });
 }
 const EVENTS = [
-  { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); game.barrages++; const n=5+Math.round(game.intensity*3); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); maybeBuster(); } },
+  { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); game.barrages++; const n=6+Math.round(game.intensity*3); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); maybeBuster(); } },
   { id:'heavy',   w:2, after:150,  run(){ banner('HEAVY GUNS','DEEP PENETRATING SHELLS'); game.barrages++; const n=2+Math.round(game.intensity); for(let k=0;k<n;k++) schedule(2.5+k*1.6+rand(), ()=>spawnShell('heavy', pickX())); maybeBuster(); } },
   { id:'rain',    w:2, after:90,  run(){ banner('STORM FRONT','FLOODING LIKELY — PUMPS READY'); rainUntil = game.t + 14 + game.intensity*3; sfx.rain(true); } },
   { id:'raid',    w:3, after:110,  run(){ banner('ENEMY RAID','INFANTRY ADVANCING'); game.raids++; const n=2+Math.round(game.intensity*1.6); for(let k=0;k<n;k++) schedule(2+k*1.4, ()=>spawnSoldier(rand()<.5?-1:1)); } },
@@ -920,7 +923,7 @@ function updateDirector() {
   if (tut.on) { updateTutorial(); return; }
   game.intensity = 1 + game.t/110;
   for (let k=timers.length-1;k>=0;k--) if (game.t>=timers[k].at) { const f=timers[k].fn; timers.splice(k,1); f(); }
-  if (game.t >= game.harassAt) { spawnShell(game.t>200 && rand()<.3 ? 'howitzer':'light', pickX()); game.harassAt = game.t + Math.max(1.6, 8 - game.t/45)*(.6+rand()*.8); }
+  if (game.t >= game.harassAt) { spawnShell(game.t>200 && rand()<.3 ? 'howitzer':'light', pickX()); game.harassAt = game.t + Math.max(1.3, 6.5 - game.t/45)*(.6+rand()*.8); }
   if (game.t >= game.nextEvent) {
     const pool = EVENTS.filter(e=>game.t>=e.after);
     let tw = pool.reduce((a,e)=>a+e.w,0), r=rand()*tw, ev=pool[0];
@@ -928,7 +931,7 @@ function updateDirector() {
     ev.run(); game.events++;
     if (game.events===5 || (game.events>5 && game.events%6===5)) schedule(6, () => { banner('GIANT METEOR','IT\'S GOING TO LEAVE A HOLE'); schedule(2.5, ()=>spawnShell('giant', pickX())); });
     if (game.events>1) { gold += 15; schedule(9, ()=>toast('Held the line  +15 ◆')); }
-    game.nextEvent = game.t + Math.max(18, 45 - game.t/12) + rand()*8;
+    game.nextEvent = game.t + Math.max(15, 38 - game.t/12) + rand()*6;
   }
   if (game.t < rainUntil) rainTick(2+game.intensity); else if (sfx.raining) sfx.rain(false);
   if (rand()<.25) { const x=rand()*W|0, y=Math.floor(cam.y + rand()*viewRows()); if (y>SKY+100 && inB(x,y) && g[y*W+x]===E && bgc[y*W+x]) particles.push({x:x+.5,y,vx:(rand()-.5)*.03,vy:-.03,life:120,max:120,k:'glow'}); }
@@ -1314,8 +1317,9 @@ function startGame(opts={}) {
   sfx.init(); sfx.rain(false);
   demo = false; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(false);
-  Object.assign(game, { t:0, tOffset:0, mined:0, kills:0, nextEvent:50, harassAt:75, intensity:1, events:0, meteors:0, raids:0, barrages:0, dug:0, props:0, drillTaps:0, concrete:0 });
+  Object.assign(game, { t:0, tOffset:0, mined:0, kills:0, nextEvent:40, harassAt:60, intensity:1, events:0, meteors:0, raids:0, barrages:0, dug:0, props:0, drillTaps:0, concrete:0 });
   for (const k in up) up[k]=0;
+  resetCapture(); gifJob++; gifBlob = null;
   tut.on = !!opts.tutorial || localStorage.getItem('sapper.tut')!=='1'; tut.i=0; tut.moved=0; tut.sawUpg=false;
   gold = 140; ITEM.gen.cost = 100; drawMode = false; state='play';
   ['menu','help','over','pause'].forEach(s=>show(s,false)); show('hud',true); show('tray',true); show('mini',true);
@@ -1347,15 +1351,121 @@ function gameOver() {
     $('overStats').innerHTML = `<div class="bigscore">${sc.toLocaleString()}</div><p>${isBest?'<em>NEW BEST SCORE</em>':'BEST '+bestScore.toLocaleString()}</p>`+
       `<p>HELD FOR <em>${fmtT(t)}</em></p><p><em>${game.meteors}</em> METEOR STRIKES · <em>${game.raids}</em> RAIDS · <em>${game.barrages}</em> BARRAGES</p><p><em>${game.kills}</em> RAIDERS STOPPED · <em>◆${game.mined.toLocaleString()}</em> MINED</p>`;
     buildShareCard(snap, sc, t);
+    buildShareGif(sc, t);
     show('over',true); show('tray',false); show('hud',false); show('mini',false);
   }, 1800);
 }
 const fmtT = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 function scoreOf(){ return Math.floor(game.t)*5 + game.events*100 + game.kills*25 + game.meteors*150 + Math.floor(game.mined/2); }
 
+// ---------- replay capture: the last ~6 seconds, for the animated share card
+const GIF_W = 360, GIF_H = 450, GIF_TOP = 290, CAP_N = 48;
+const capRing = []; let capHead = 0, capCount = 0, lastFocusY = null;
+function captureFrame() {
+  if (!capRing.length) for (let k=0;k<CAP_N;k++) { const c=document.createElement('canvas'); c.width=GIF_W; c.height=GIF_TOP; capRing.push(c); }
+  const c = capRing[capHead], x = c.getContext('2d');
+  // aim at the action: the latest big blast if there is one, otherwise the nearest generator
+  let fy = null; for (const f of flashes) if (f.r > 20) fy = f.y;
+  if (fy===null) { const mid = cam.y + viewRows()*.4; let bd=1e9; for (const gn of gens) { const d=Math.abs(gn.y-mid); if (d<bd) { bd=d; fy=gn.y+3; } } }
+  if (fy===null) fy = lastFocusY; else lastFocusY = fy;
+  const sh2 = cv.width * GIF_TOP / GIF_W, cy = fy===null ? cv.height*.38 : (fy - cam.y)*scale;
+  const sy = Math.max(0, Math.min(cv.height - trayPx - sh2, cy - sh2*.45));
+  x.imageSmoothingEnabled = false; x.drawImage(cv, 0, sy, cv.width, sh2, 0, 0, GIF_W, GIF_TOP);
+  capHead = (capHead+1) % CAP_N; capCount = Math.min(CAP_N, capCount+1);
+}
+function resetCapture(){ capHead = 0; capCount = 0; }
+
+// GIF89a encoder (LZW). The 256-colour palette is built from the replay itself: the most common colours
+// (pixel art uses few) plus the card's text colours, so the dirt and rock keep their real tones.
+let GIF_PAL = [], GIF_LUT = null;
+function gifBuildPalette(hist) {
+  const bins=[]; for (let i=0;i<32768;i++) if (hist[i]) bins.push(i);
+  bins.sort((a,b)=>hist[b]-hist[a]);
+  GIF_PAL = ['#0d0a07','#f0d68a','#cdb98a','#e6bf4a','#d8c9a3','#8a7a5a'].map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+  for (const i of bins) { if (GIF_PAL.length>=256) break; GIF_PAL.push([(i>>10)*8+4, ((i>>5)&31)*8+4, (i&31)*8+4]); }
+  GIF_LUT = null;
+}
+function gifLut() {
+  if (GIF_LUT) return GIF_LUT;
+  GIF_LUT = new Uint8Array(32768);
+  for (let i=0;i<32768;i++) { const r=(i>>10)*8+4, g2=((i>>5)&31)*8+4, b=(i&31)*8+4; let best=0, bd=1e9;
+    for (let k=0;k<GIF_PAL.length;k++) { const c=GIF_PAL[k], d=(c[0]-r)**2+(c[1]-g2)**2+(c[2]-b)**2; if (d<bd) { bd=d; best=k; } } GIF_LUT[i]=best; }
+  return GIF_LUT;
+}
+function gifIndex(data) { const lut=gifLut(), n=data.length>>2, out=new Uint8Array(n); for (let i=0,j=0;i<n;i++,j+=4) out[i]=lut[((data[j]>>3)<<10)|((data[j+1]>>3)<<5)|(data[j+2]>>3)]; return out; }
+function GifWriter() { let buf=new Uint8Array(1<<20), n=0;
+  const byte = v => { if (n>=buf.length) { const b=new Uint8Array(buf.length*2); b.set(buf); buf=b; } buf[n++]=v; };
+  return { byte, u16: v => { byte(v&255); byte((v>>8)&255); }, str: s2 => { for (const ch of s2) byte(ch.charCodeAt(0)); }, bytes: () => buf.subarray(0,n) }; }
+function gifLzw(w, px) {
+  const min=8, clear=256, eoi=257; let size=9, next=258, cur=0, bits=0; const table=new Map(), block=[];
+  const emit = code => { cur |= code << bits; bits += size; while (bits>=8) { block.push(cur&255); cur>>>=8; bits-=8; if (block.length===255) { w.byte(255); for (const b of block) w.byte(b); block.length=0; } } };
+  w.byte(min); emit(clear);
+  let prefix = px[0];
+  for (let i=1;i<px.length;i++) {
+    const k=px[i], key=prefix*256+k, c=table.get(key);
+    if (c!==undefined) { prefix=c; continue; }
+    emit(prefix);
+    if (next===4096) { emit(clear); table.clear(); size=9; next=258; }
+    else { if (next >= (1<<size)) size++; table.set(key, next++); }
+    prefix=k;
+  }
+  emit(prefix); emit(eoi);
+  if (bits>0) block.push(cur&255);
+  if (block.length) { w.byte(block.length); for (const b of block) w.byte(b); }
+  w.byte(0);
+}
+function gifStart(w, width, height) {
+  w.str('GIF89a'); w.u16(width); w.u16(height); w.byte(0xF7); w.byte(0); w.byte(0);
+  for (let k=0;k<256;k++) { const c=GIF_PAL[k]||[0,0,0]; w.byte(c[0]); w.byte(c[1]); w.byte(c[2]); }
+  w.byte(0x21); w.byte(0xFF); w.byte(11); w.str('NETSCAPE2.0'); w.byte(3); w.byte(1); w.u16(0); w.byte(0);   // loop forever
+}
+function gifFrame(w, width, height, px, delayCs) {
+  w.byte(0x21); w.byte(0xF9); w.byte(4); w.byte(0); w.u16(delayCs); w.byte(0); w.byte(0);
+  w.byte(0x2C); w.u16(0); w.u16(0); w.u16(width); w.u16(height); w.byte(0);
+  gifLzw(w, px);
+}
+// the static parts of the card: title band on top, stats panel below the replay
+function drawCardOverlay(x, sc, t) {
+  const mono='ui-monospace,Menlo,"Courier New",monospace';
+  const tg=x.createLinearGradient(0,0,0,90); tg.addColorStop(0,'#0d0a07ee'); tg.addColorStop(1,'#0d0a0700'); x.fillStyle=tg; x.fillRect(0,0,GIF_W,90);
+  x.imageSmoothingEnabled=false; x.drawImage($('title'), 0,0,96,26, 84, 12, 96*2, 26*2);
+  const gr=x.createLinearGradient(0,GIF_TOP-60,0,GIF_TOP); gr.addColorStop(0,'#0d0a0700'); gr.addColorStop(1,'#0d0a07'); x.fillStyle=gr; x.fillRect(0,GIF_TOP-60,GIF_W,60);
+  x.fillStyle='#0d0a07'; x.fillRect(0,GIF_TOP,GIF_W,GIF_H-GIF_TOP);
+  x.textAlign='center'; x.fillStyle='#cdb98a'; x.font=`700 13px ${mono}`; x.fillText('I HELD THE LINE FOR', GIF_W/2, GIF_TOP+8);
+  x.fillStyle='#f0d68a'; x.font=`900 40px ${mono}`; x.fillText(fmtT(t), GIF_W/2, GIF_TOP+46);
+  x.fillStyle='#e6bf4a'; x.font=`900 20px ${mono}`; x.fillText(`SCORE ${sc.toLocaleString()}`, GIF_W/2, GIF_TOP+72);
+  x.font=`800 13px ${mono}`; x.fillStyle='#d8c9a3';
+  x.fillText(`${game.meteors||0} METEORS · ${game.raids||0} RAIDS · ${game.kills||0} RAIDERS DOWN`, GIF_W/2, GIF_TOP+96);
+  x.fillStyle='#cdb98a'; x.font=`800 13px ${mono}`; x.fillText('CAN YOU HOLD THE LINE?', GIF_W/2, GIF_TOP+124);
+  x.fillStyle='#cdb98a'; x.font=`700 11px ${mono}`; x.fillText(SHARE_URL.replace('https://',''), GIF_W/2, GIF_TOP+144);
+}
+let gifBlob = null, gifJob = 0, capTick = 0;
+function buildShareGif(sc, t) {
+  const job = ++gifJob; gifBlob = null;
+  const n = capCount; if (n < 4) return;
+  const order = []; for (let k=0;k<n;k++) order.push(capRing[(capHead - n + k + CAP_N) % CAP_N]);
+  const comp = document.createElement('canvas'); comp.width=GIF_W; comp.height=GIF_H; const x = comp.getContext('2d', { willReadFrequently:true });
+  const overlay = document.createElement('canvas'); overlay.width=GIF_W; overlay.height=GIF_H; drawCardOverlay(overlay.getContext('2d'), sc, t);
+  const compose = f => { x.fillStyle='#0d0a07'; x.fillRect(0,0,GIF_W,GIF_H); x.drawImage(f,0,0); x.drawImage(overlay,0,0); return x.getImageData(0,0,GIF_W,GIF_H).data; };
+  // pass 1: colour histogram over a sample of every frame
+  const hist = new Uint32Array(32768);
+  for (let q=0;q<order.length;q+=2) { const d=compose(order[q]); for (let j=0;j<d.length;j+=12) hist[((d[j]>>3)<<10)|((d[j+1]>>3)<<5)|(d[j+2]>>3)]++; }
+  gifBuildPalette(hist);
+  const w = GifWriter(); gifStart(w, GIF_W, GIF_H);
+  const btn = $('shareBtn'); let k = 0;
+  const step = () => {
+    if (job !== gifJob) return;
+    gifFrame(w, GIF_W, GIF_H, gifIndex(compose(order[k])), k===order.length-1 ? 250 : 13);
+    k++; btn.textContent = `Making GIF… ${Math.round(k/order.length*100)}%`;
+    if (k < order.length) setTimeout(step, 0);
+    else { w.byte(0x3B); gifBlob = new Blob([w.bytes()], { type:'image/gif' }); $('sharePreview').src = URL.createObjectURL(gifBlob); btn.textContent = 'Share My Score'; }
+  };
+  setTimeout(step, 50);
+}
+
 // ---------- share card: an image + text for Signal, WhatsApp, etc.
 const SHARE_URL = 'https://jonathanwilson1.github.io/Sapper-iOS/';
-let shareBlob = null, shareText = '';
+let shareBlob = null, shareText = '', shareCardUrl = '';
 function buildShareCard(snap, sc, t) {
   const c = document.createElement('canvas'); c.width=1080; c.height=1350; const x = c.getContext('2d');
   x.fillStyle='#0d0a07'; x.fillRect(0,0,1080,1350);
@@ -1376,13 +1486,14 @@ function buildShareCard(snap, sc, t) {
   x.textAlign='center'; x.fillStyle='#cdb98a'; x.font=`800 32px ${mono}`; x.fillText('CAN YOU HOLD THE LINE?', 540, 1285);
   x.fillStyle='#8a7a5a'; x.font=`700 26px ${mono}`; x.fillText(SHARE_URL.replace('https://',''), 540, 1325);
   shareText = `I held the line for ${fmtT(t)} in SAPPER — survived ${game.meteors} meteor strike${game.meteors===1?'':'s'} and ${game.raids} wave${game.raids===1?'':'s'} of raiders. Score ${sc.toLocaleString()}. Can you beat it? ${SHARE_URL}`;
-  $('sharePreview').src = c.toDataURL('image/png');
+  shareCardUrl = c.toDataURL('image/png'); $('sharePreview').src = shareCardUrl;
   shareBlob = null; c.toBlob(b => { shareBlob = b; }, 'image/png');
 }
 async function shareScore() {
-  const dataUrl = $('sharePreview').src;
+  const usingGif = !!gifBlob, blob = gifBlob || shareBlob, name = usingGif ? 'sapper-score.gif' : 'sapper-score.png';
+  const dataUrl = usingGif ? await new Promise(res => { const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(gifBlob); }) : shareCardUrl;
   try { if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.share) { window.webkit.messageHandlers.share.postMessage({ image:dataUrl, text:shareText }); return; } } catch(e) {}
-  const file = shareBlob && new File([shareBlob], 'sapper-score.png', { type:'image/png' });
+  const file = blob && new File([blob], name, { type: usingGif ? 'image/gif' : 'image/png' });
   try {
     // iOS hands apps like Signal only the text when a share has both, so share the image alone (it carries the link)
     // and put the caption on the clipboard to paste alongside it
@@ -1392,7 +1503,7 @@ async function shareScore() {
     }
     if (navigator.share) { await navigator.share({ text:shareText }); return; }
   } catch(e) { if (e && e.name==='AbortError') return; }
-  const a=document.createElement('a'); a.href=dataUrl; a.download='sapper-score.png'; a.click();
+  const a=document.createElement('a'); a.href=dataUrl; a.download=name; a.click();
   try { await navigator.clipboard.writeText(shareText); toast('Image saved, score text copied'); } catch(e) {}
 }
 
@@ -1458,9 +1569,10 @@ function frame(now) {
   if (gesture==='draw') { const p=[...pointers.values()][0]; if (p) { drawAt=toWorld(p.x,p.y); paintConcrete(drawAt); } }
   if (gesture==='dig') { const p=[...pointers.values()][0]; if (p) digAt=toWorld(p.x,p.y); }
   render();
+  if ((state==='play'||state==='dying') && ++capTick % 8 === 0) captureFrame();
   if (state==='play') { updateHUD(); if (++frameN % 12 === 0) renderMini(); }
 }
-window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, tut, up, get shareText(){return shareText;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
+window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, tut, up, get shareText(){return shareText;}, get gifBlob(){return gifBlob;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
 updateBest(); startDemo(); resize(); requestAnimationFrame(frame);
 if ('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
