@@ -447,7 +447,7 @@ const BAY_W = GEN_W+4, BAY_H = GEN_H+5;   // every building sits in the same tim
 const ROOMDEFS = [
   { id:'gen',      name:'GENERATOR',      desc:'Earns ◆. Keep them 30+ cells apart; shallow pays most', cost:100 },
   { id:'pump',     name:'PUMP',           desc:'Drains floodwater nearby',                 cost:40 },
-  { id:'miners',   name:'MINERS\' HUT',    desc:'3 more miners to dig what you mark',        cost:100 },
+  { id:'miners',   name:'MINERS\' HUT',    desc:'6 more miners to dig what you mark',        cost:100 },
   { id:'hospital', name:'FIELD HOSPITAL', desc:'A medic carries wounded miners in and treats them. Also patches up nearby generators', cost:80 },
   { id:'mine',     name:'MINE HEAD',      desc:'Ore dug within 30 cells pays 50% more',     cost:90 },
   { id:'magazine', name:'MAGAZINE',       desc:'Pays ◆40 every wave — explodes if hit',    cost:50 },
@@ -1071,7 +1071,7 @@ function digCell(i) {
   if (tick-digSoundT>5) { digSoundT=tick; sfx.dig(); }
   for (const s2 of soldiers) if (s2.tun && Math.hypot(s2.x-x, s2.y-1-y) < 3) { s2.hp = 0; s2.revealed = true; }
 }
-const DIGGERS_PER_HUT = 3;
+const DIGGERS_PER_HUT = 6;
 let diggers = [];
 const walkable = i => { const t=g[i]; return !SOLID[t] || t===ROOM || t===HQ; };
 const bfsSeen = new Uint32Array(W*H), bfsPrev = new Int32Array(W*H); let bfsGen = 0;
@@ -1457,7 +1457,7 @@ function drawEntities(s) {
     const {x,y,w,h} = r, fl = y+h-1;
     px(x,y,w,h,'#2e271e'); px(x,y,w,1,'#4a3a26'); px(x,fl,w,1,'#1c1712'); px(x,y,1,h,'#3a2e1e'); px(x+w-1,y,1,h,'#3a2e1e');   // walls, beam, floor
     px(x+w/2,y+1,1,1,(tick>>5)%9?'#ffe196':'#c8a860');                                                                    // hanging lamp
-    if (r.kind==='miners') { for (let k=0;k<2;k++) { px(x+2,y+2+k*2,5,.7,'#6a5032'); px(x+2,y+1.5+k*2,5,.5,'#a89a78'); } for (let k=0;k<3;k++) { px(x+w-3-k*1.6,y+2,.4,3,'#6a5030'); px(x+w-3.6-k*1.6,y+2,1.6,.5,'#b0b4b8'); } px(x+8,fl-1,2,1,'#4a4a50'); const crew=diggers.filter(d=>d.hut===r).length; for (let k=0;k<DIGGERS_PER_HUT;k++) px(x+9+k*1.4,y+1.4,.8,.8,k<crew?'#9fd07a':'#5a2a20'); continue; }
+    if (r.kind==='miners') { for (let k=0;k<2;k++) { px(x+2,y+2+k*2,5,.7,'#6a5032'); px(x+2,y+1.5+k*2,5,.5,'#a89a78'); } for (let k=0;k<3;k++) { px(x+w-3-k*1.6,y+2,.4,3,'#6a5030'); px(x+w-3.6-k*1.6,y+2,1.6,.5,'#b0b4b8'); } px(x+8,fl-1,2,1,'#4a4a50'); const crew=diggers.filter(d=>d.hut===r).length; for (let k=0;k<DIGGERS_PER_HUT;k++) px(x+8+k*1.1,y+1.4,.7,.7,k<crew?'#9fd07a':'#5a2a20'); continue; }
     if (!r.people) r.people = [0,1,2].map(k => ({ x: 2+k*5, dir: k%2?-1:1, wait: k*40, carry: false }));
     if (r.kind==='listen') {
       px(x+2,fl-2,6,.6,'#6a5032'); px(x+2.5,fl-1.4,.4,1.4,'#4a3a26'); px(x+7,fl-1.4,.4,1.4,'#4a3a26');                    // desk
