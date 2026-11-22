@@ -159,6 +159,7 @@
 
 <script>
 'use strict';
+const BUILD = 'dev';   // stamped by scripts/deploy.sh
 // =====================================================================
 //  SAPPER — falling-sand bunker survival.  Single file, no network.
 // =====================================================================
@@ -1642,7 +1643,7 @@ async function shareScore() {
 
 function pause(){ if (state!=='play') return; state='paused'; show('pause',true); }
 function resume(){ state='play'; show('pause',false); last=performance.now(); }
-function toMenu(){ ['over','pause','help','hud','tray','mini','tut','upg','roomsScr'].forEach(s=>show(s,false)); show('menu',true); updateBest(); startDemo(); resize(); }
+function toMenu(){ if (checkForUpdate.pending) { location.reload(); return; } ['over','pause','help','hud','tray','mini','tut','upg','roomsScr'].forEach(s=>show(s,false)); show('menu',true); updateBest(); startDemo(); resize(); }
 function updateBest(){ const b=game.best, bs=+(localStorage.getItem('sapper.bestScore')||0); $('bestStat').textContent = b ? `BEST SCORE ${bs.toLocaleString()} · HELD ${fmtT(b)}` : '';
   const ds=+(localStorage.getItem('sapper.daily.'+todayKey())||0); $('dailyStat').textContent = `TODAY (${todayLabel()}): ` + (ds ? `BEST ${ds.toLocaleString()}` : 'NOT PLAYED YET'); }
 $('startBtn').onclick = () => startGame();
@@ -1713,6 +1714,19 @@ function frame(now) {
 window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, get rooms(){return rooms;}, spawnTunneller, get secretCount(){ return secret.reduce((a,v)=>a+v,0); }, get daily(){return game.daily;}, tut, up, get shareText(){return shareText;}, get gifBlob(){return gifBlob;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
 updateBest(); startDemo(); resize(); requestAnimationFrame(frame);
 if ('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+// Home-screen apps on iOS resume instead of reloading, so look for a newer build whenever the game comes back to the front
+async function checkForUpdate() {
+  if (location.protocol!=='https:' || !navigator.onLine) return;
+  try {
+    const txt = await (await fetch('./index.html', { cache:'no-store' })).text();
+    const m = txt.match(/const BUILD = '([^']+)'/);
+    if (!m || m[1]===BUILD) return;
+    if (state==='menu' || state==='over') location.reload();
+    else { checkForUpdate.pending = true; toast('New version ready — it loads when you return to the menu'); }
+  } catch(e) {}
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
+setTimeout(checkForUpdate, 3000);
 </script>
 </body>
 </html>
