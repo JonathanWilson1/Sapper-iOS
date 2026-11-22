@@ -444,7 +444,7 @@ function openUpgrades(){ if (state!=='play') return; state='paused'; renderUpgra
 
 // ---------- rooms: dig a space, drop one in; each works on its own
 const ROOMDEFS = [
-  { id:'gen',      name:'GENERATOR',      desc:'Earns ◆. Keep them 30+ cells apart; shallow pays most', cost:100, w:GEN_W+4, h:GEN_H+3 },
+  { id:'gen',      name:'GENERATOR',      desc:'Earns ◆. Keep them 30+ cells apart; shallow pays most', cost:100, w:GEN_W+4, h:GEN_H+5 },
   { id:'pump',     name:'PUMP',           desc:'Drains floodwater nearby',                 cost:40,  w:4, h:3 },
   { id:'miners',   name:'MINERS\' HUT',    desc:'3 more miners to dig what you mark',        cost:100, w:16, h:7 },
   { id:'hospital', name:'FIELD HOSPITAL', desc:'Slowly repairs generators within 40 cells', cost:80,  w:16, h:7 },
@@ -514,7 +514,7 @@ function footprints() {
   const f=[];
   // `floor` is the row people stand on: under a room, or the concrete pad of a generator bay
   for (const r of rooms) f.push({ x0:r.x, y0:r.y, x1:r.x+r.w-1, y1:r.y+r.h-1, floor:r.y+r.h });
-  for (const gn of gens) f.push({ x0:gn.x-2, y0:gn.y-2, x1:gn.x+gn.w+1, y1:gn.y+gn.h, floor:gn.y+gn.h });
+  for (const gn of gens) f.push({ x0:gn.x-2, y0:gn.y-4, x1:gn.x+gn.w+1, y1:gn.y+gn.h, floor:gn.y+gn.h });
   for (const st of sites) f.push({ x0:st.x0, y0:st.y0, x1:st.x1, y1:st.y1, floor: st.id==='gen' ? st.y1 : st.y1+1 });
   return f;
 }
@@ -540,7 +540,7 @@ function siteStamp(id, cx, cy) {
     let ct = t;
     if (id==='gen') {   // posts and a two-row beam round the edge, an open bay, the dynamo, a concrete pad
       const lx=x-x0, ly=y-y0;
-      ct = ly===h-1 ? CONC : (ly<2 || lx===0 || lx===w-1) ? PROPBG : (lx>=2 && lx<w-2) ? HQ : E;
+      ct = ly===h-1 ? CONC : (ly<2 || lx===0 || lx===w-1) ? PROPBG : (lx>=2 && lx<w-2 && ly>=h-1-GEN_H) ? HQ : E;   // headroom between beam and engine, like the starting chamber
     }
     const c=[x,y,ct];
     if (!inB(x,y)) { c.ok=false; ok=false; cells.push(c); continue; }
