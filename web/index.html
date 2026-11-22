@@ -106,7 +106,7 @@
   <button id="helpBtn">Field Manual</button>
   <button id="soundBtn">Sound: On</button>
   <div class="small" id="bestStat"></div>
-  <div class="small" style="opacity:.4">PROTOTYPE 0.1</div>
+  <div class="small" style="opacity:.4" id="buildStat">PROTOTYPE 0.1</div>
 </div>
 
 <div id="help" class="screen" hidden>
@@ -1865,6 +1865,7 @@ function frame(now) {
   if (state==='play') { updateHUD(); if (++frameN % 12 === 0) renderMini(); }
 }
 window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, get diggers(){return diggers;}, mark, get rooms(){return rooms;}, spawnTunneller, get secretCount(){ return secret.reduce((a,v)=>a+v,0); }, get daily(){return game.daily;}, tut, up, get shareText(){return shareText;}, get gifBlob(){return gifBlob;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
+$('buildStat').textContent = 'PROTOTYPE · BUILD ' + (BUILD==='dev' ? 'DEV' : BUILD.slice(4,8)+'-'+BUILD.slice(8,12));
 updateBest(); startDemo(); resize(); requestAnimationFrame(frame);
 if ('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 // Home-screen apps on iOS resume instead of reloading, so look for a newer build whenever the game comes back to the front
