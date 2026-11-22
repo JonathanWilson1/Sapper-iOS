@@ -28,6 +28,7 @@ struct GameView: UIViewRepresentable {
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.userContentController.add(context.coordinator, name: "haptic")
+        config.userContentController.add(context.coordinator, name: "share")
 
         let web = WKWebView(frame: .zero, configuration: config)
         web.isOpaque = false
@@ -44,9 +45,13 @@ struct GameView: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
-/// Receives `window.webkit.messageHandlers.haptic.postMessage(kind)` from the game.
+/// Receives `haptic` and `share` messages from the game.
 final class Haptics: NSObject, WKScriptMessageHandler {
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "share", let body = message.body as? [String: Any] {
+            presentShare(body)
+            return
+        }
         switch message.body as? String {
         case "light": UIImpactFeedbackGenerator(style: .light).impactOccurred()
         case "medium": UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -55,4 +60,24 @@ final class Haptics: NSObject, WKScriptMessageHandler {
         default: break
         }
     }
+
+    /// Shows the iOS share sheet with the score card image and text (Signal, WhatsApp, Messages...).
+    private func presentShare(_ body: [String: Any]) {
+        var items: [Any] = []
+        if let dataURL = body["image"] as? String,
+           let comma = dataURL.firstIndex(of: ","),
+           let data = Data(base64Encoded: String(dataURL[dataURL.index(after: comma)...])),
+           let image = UIImage(data: data) {
+            items.append(image)
+        }
+        if let text = body["text"] as? String { items.append(text) }
+        guard !items.isEmpty,
+              let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let root = scene.keyWindow?.rootViewController else { return }
+        let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        sheet.popoverPresentationController?.sourceView = root.view
+        sheet.popoverPresentationController?.sourceRect = CGRect(x: root.view.bounds.midX, y: root.view.bounds.maxY - 80, width: 1, height: 1)
+        (root.presentedViewController ?? root).present(sheet, animated: true)
+    }
 }
+

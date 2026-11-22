@@ -57,6 +57,19 @@
   #over h1,#pause h1{margin:0;letter-spacing:4px;color:#f0d68a;text-shadow:2px 2px 0 #000}
   #over{background:#000b}
   #pause{background:#0009}
+  #tut{position:fixed;left:8px;right:56px;top:calc(env(safe-area-inset-top) + 54px);background:#15110df2;border:2px solid var(--brass);padding:10px 12px;z-index:6;font-size:16px;line-height:1.4}
+  #tutStep{font-size:12px;letter-spacing:2px;color:var(--brass);font-weight:800;margin-bottom:4px}
+  #tutSkip{margin-top:8px;padding:6px 10px;font-size:12px;min-width:0}
+  .uprow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #3a2f22}
+  .uprow:first-child{border-top:0}
+  .uprow div{flex:1}
+  .uprow b{display:block;color:#f0d68a;letter-spacing:1px}
+  .uprow small{opacity:.8;font-size:13px}
+  .uprow button{min-width:0;padding:8px 10px;font-size:14px}
+  .pips{color:#e6bf4a;letter-spacing:2px;font-size:13px}
+  #sharePreview{width:min(60vw,240px);border:2px solid var(--edge);image-rendering:auto}
+  #over{overflow:auto;justify-content:flex-start;padding-top:calc(env(safe-area-inset-top) + 24px)}
+  .bigscore{font-size:34px;color:#f0d68a;font-weight:900;letter-spacing:2px;margin:4px 0 8px}
   .scanlines{position:fixed;inset:0;pointer-events:none;z-index:3;
     background:repeating-linear-gradient(#0000 0 2px,#0000000d 2px 3px),radial-gradient(ellipse at center,#0000 55%,#0008 100%)}
 </style>
@@ -72,6 +85,7 @@
   <div id="hqBar"><div id="hqFill"></div><span id="hqText">GENERATORS</span></div>
 </div>
 <div id="banner"></div>
+<div id="tut" hidden><div id="tutStep"></div><div id="tutText"></div><button id="tutSkip">Skip tutorial</button></div>
 <div id="toast"></div>
 <canvas id="mini" width="48" height="110" hidden></canvas>
 <div id="tray" hidden></div>
@@ -80,6 +94,7 @@
   <canvas id="title"></canvas>
   <p class="tag">HOLD THE LINE. DIG DEEP. DON'T DROWN.</p>
   <button id="startBtn" class="primary">Dig In</button>
+  <button id="campBtn">Boot Camp</button>
   <button id="helpBtn">Field Manual</button>
   <button id="soundBtn">Sound: On</button>
   <div class="small" id="bestStat"></div>
@@ -90,11 +105,13 @@
   <div class="card">
     <h2>FIELD MANUAL</h2>
     <p><em>Two fingers</em> scroll and pinch to zoom.</p>
-    <p><em>One finger digs</em>: drag through earth beside any tunnel. Rock is slow. Gold ore pays ◆.</p>
+    <p><em>One finger digs</em> anywhere you drag. Rock is slow. Gold ore pays ◆.</p>
     <p>Wide caverns cave in. Undercut a rock and it drops in one piece.</p>
-    <p><em>GENERATORs</em> earn ◆. Shallow ones pay most but sit under the shells; none work below the dashed line.</p>
+    <p><em>GENERATORs</em> earn ◆. Keep them 30+ cells apart or they share output. Shallow ones pay most but sit under the shells.</p>
+    <p><em>THE GLOW</em>: gas shells and buried munitions from the last war leaked deep into the earth. The deeper a generator sits, the more the Glow saps it.</p>
     <p>Tap a <em>GENERATOR</em> to overcharge it: double output for 20s, but sparks start fires that burn props.</p>
-    <p>Gold ore is worth ◆4 near the top, up to ◆10 deep down, with rare ◆25 nuggets.</p>
+    <p>Gold ore is worth ◆5 near the top, up to ◆15 deep down, with rare ◆40 nuggets.</p>
+    <p><em>UPGRADE</em> (in the tray) buys upgrades: shovels, drill bits, dynamos, plating and more.</p>
     <p>Tap your <em>DRILL</em> to bore 20 cells straight down for ◆10, mining any ore it passes. The deep half of the map is rich in gold.</p>
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>CONCRETE</em> soaks up shellfire — tap it, then draw with one finger.</p>
@@ -103,6 +120,11 @@
     <p>Lose every <em>GENERATOR</em> and the line falls. Survive as long as you can.</p>
   </div>
   <button id="helpBack" class="primary">Understood</button>
+</div>
+
+<div id="upg" class="screen" hidden>
+  <div class="card"><h2>UPGRADES <span class="gold" id="upgGold"></span></h2><div id="upgList"></div></div>
+  <button id="upgClose" class="primary">Back to the Line</button>
 </div>
 
 <div id="pause" class="screen" hidden>
@@ -115,7 +137,9 @@
 <div id="over" class="screen" hidden>
   <h1>THE LINE HAS FALLEN</h1>
   <div class="card" style="text-align:center" id="overStats"></div>
-  <button id="againBtn" class="primary">Dig In Again</button>
+  <img id="sharePreview" alt="">
+  <button id="shareBtn" class="primary">Share My Score</button>
+  <button id="againBtn">Dig In Again</button>
   <button id="overMenuBtn">Main Menu</button>
 </div>
 
@@ -264,13 +288,14 @@ function buildBase(isDemo) {
 
 // ---------- generators: the thing you protect. Each earns ◆; shallow ones earn more but take the shelling.
 const GEN_W = 14, GEN_H = 7, GEN_MAX = 110;
-function genRate(x,y){ const d=Math.max(0, y - surfOrig[Math.max(0,Math.min(W-1,x|0))]); return d>GEN_MAX ? 0 : 1.2*(1-d/140); }
+const glowLoss = d => Math.min(.8, Math.max(0, d-20)/200);   // THE GLOW: the deeper, the more it saps a generator (never all of it)
+function genRate(x,y){ const d=Math.max(0, y - surfOrig[Math.max(0,Math.min(W-1,x|0))]); return 1.2*(1-glowLoss(d)); }
 // generators packed close together share the same supply line: each one's output is split with its neighbours
 const GEN_SPACING = 30;
 function crowd(cx,cy,skip){ let n=0; for (const o of gens) if (o!==skip && Math.hypot(o.x+o.w/2-cx, o.y+o.h/2-cy) < GEN_SPACING) n++; return n; }
-const genEff = gn => gn.rate / (1 + crowd(gn.x+gn.w/2, gn.y+gn.h/2, gn)) * (gn.oc?2:1);
+const genEff = gn => gn.rate / (1 + crowd(gn.x+gn.w/2, gn.y+gn.h/2, gn)) * (gn.oc?2:1) * (1 + .25*up.gen);
 function genAt(x,y){ for (const gn of gens) if (x>=gn.x && x<gn.x+gn.w && y>=gn.y && y<gn.y+gn.h) return gn; return null; }
-function addGen(x,y){ const gn={ x, y, w:GEN_W, h:GEN_H, hp:100, max:100, acc:0, n:0, hit:0, oc:0, cool:0, rate:genRate(x+GEN_W/2, y+GEN_H) }; gens.push(gn); return gn; }
+function addGen(x,y){ const gn={ x, y, w:GEN_W, h:GEN_H, hp:100+40*up.armour, max:100+40*up.armour, acc:0, n:0, hit:0, oc:0, cool:0, rate:genRate(x+GEN_W/2, y+GEN_H) }; gens.push(gn); return gn; }
 const OC_TIME = 20*60, OC_COOL = 30*60;
 function overcharge(gn) {
   if (gn.oc) return;
@@ -320,14 +345,19 @@ function mineOre(x,y) {
 // ---------- drills: tap to bore a 3-wide shaft straight down
 const DRILL_STEP = 20, DRILL_COST = 10, DRILL_W = 6;
 function drillAt(w){ return drills.find(d => w.x>=d.x-1.5 && w.x<d.x+DRILL_W+1.5 && w.y>=d.y-4 && w.y<d.y+5.5); }
+function airdropDrill() {
+  if (drills.length || state!=='play') return;
+  const gn = gens[0]; const x = gn ? Math.max(4,Math.min(W-10, gn.x+GEN_W+6)) : W/2;
+  if (place('drill', x, Math.max(2, surfaceAt(x|0)-6), true)) { banner('DRILL DELIVERED','PARACHUTED IN AT THE SURFACE'); const d=drills[drills.length-1]; cam.y = d.y - viewRows()*.4; clampCam(); }
+}
 function pressDrill(d) {
   if (gold < DRILL_COST) { toast('Not enough gold to run the drill'); sfx.deny(); return; }
-  gold -= DRILL_COST; d.rem += DRILL_STEP; sfx.thunk(); haptic('light');
+  gold -= DRILL_COST; d.rem += DRILL_STEP + 10*up.drill; game.drillTaps++; sfx.thunk(); haptic('light');
 }
 function updateDrills() {
   for (let k=drills.length-1;k>=0;k--) {
     const d=drills[k];
-    if (g[idx(d.x,d.y)]!==DRILL) { drills.splice(k,1); continue; }
+    if (g[idx(d.x,d.y)]!==DRILL) { drills.splice(k,1); if (!drills.length && state==='play') { toast('Drill lost — a replacement is on its way'); schedule(15, airdropDrill); } continue; }
     if (!d.rem) continue;
     const by=d.y+4;
     if (by>=H) { d.rem=0; continue; }
@@ -335,7 +365,7 @@ function updateDrills() {
     for (let c=0;c<DRILL_W;c++) { const t=g[by*W+d.x+c]; if (t===BED||t===HQ||t===CONC||t===DRILL||t===MG||t===PUMP) block=true; if (t===ROCK||t===GOLD) hard=true; }
     if (block) { d.rem=0; toast('Drill hit something it can\'t bore through'); continue; }
     d.spin=(d.spin||0)+1;
-    if (++d.work < (hard?10:3)) continue;
+    if (++d.work < (hard ? 10-3*up.drill : Math.max(1,3-up.drill))) continue;
     d.work=0;
     for (let c=0;c<DRILL_W;c++) {
       const i=by*W+d.x+c;
@@ -355,12 +385,39 @@ function updateDrills() {
   }
 }
 
+// ---------- upgrades
+const up = { shovel:0, drill:0, gen:0, armour:0, mg:0, pump:0 };
+const UPGRADES = [
+  { id:'shovel', name:'SHARPER SHOVELS', desc:'Dig wider and faster', costs:[60,140,260] },
+  { id:'drill',  name:'DRILL BITS',      desc:'+10 depth per tap, bores faster', costs:[80,180] },
+  { id:'gen',    name:'TUNED DYNAMOS',   desc:'All generators +25% output', costs:[120,240,400] },
+  { id:'armour', name:'STEEL PLATING',   desc:'Generators +40 strength, fully repaired', costs:[120,260] },
+  { id:'mg',     name:'BELT FEED',       desc:'MG nests fire twice as fast', costs:[100] },
+  { id:'pump',   name:'BIG PUMPS',       desc:'Pumps drain twice as fast, further', costs:[80] },
+];
+function buyUpgrade(id) {
+  const u = UPGRADES.find(u=>u.id===id), lv = up[id], cost = u.costs[lv];
+  if (cost===undefined) return;
+  if (gold < cost) { sfx.deny(); toast('Not enough gold'); return; }
+  gold -= cost; up[id]++; sfx.thunk(); haptic('medium');
+  if (id==='armour') for (const gn of gens) { gn.max += 40; gn.hp = gn.max; }
+  renderUpgrades();
+}
+function renderUpgrades() {
+  $('upgGold').textContent = '◆ '+gold;
+  $('upgList').innerHTML = UPGRADES.map(u => { const lv=up[u.id], cost=u.costs[lv];
+    return `<div class="uprow"><div><b>${u.name}</b><small>${u.desc}</small><div class="pips">${'■'.repeat(lv)}${'□'.repeat(u.costs.length-lv)}</div></div>`+
+      (cost===undefined ? '<button disabled>MAX</button>' : `<button data-up="${u.id}" ${gold<cost?'style="opacity:.5"':''}>◆${cost}</button>`)+'</div>'; }).join('');
+}
+function openUpgrades(){ if (state!=='play') return; state='paused'; renderUpgrades(); show('upg',true); }
+
 // ---------- structures / stamps
 const ITEMS = [
   { id:'prop',     name:'PROP',    cost:10,  kind:'stamp' },
   { id:'concrete', name:'CONCRETE',cost:1,   kind:'draw' },
   { id:'pump',     name:'PUMP',    cost:40,  kind:'stamp' },
   { id:'mg',       name:'MG', cost:60,  kind:'stamp' },
+  { id:'upg',      name:'UPGRADE', cost:0,   kind:'action' },
   { id:'gen',      name:'GEN',cost:100, kind:'stamp' },
 ];
 const ITEM = Object.fromEntries(ITEMS.map(i=>[i.id,i]));
@@ -424,12 +481,14 @@ function place(id, cx, cy, freeOfCharge) {
   if (id==='pump') { const c=s.cells[0]; pumps.push({ x:c[0], y:c[1], spin:0 }); }
   if (id==='mg')   { const c=s.cells[0]; mgs.push({ x:c[0], y:c[1], cool:0, ang:-Math.PI/2, flash:0 }); }
   if (id==='gen')  { const c=s.cells[0]; addGen(c[0],c[1]); }
+  if (id==='prop' && !freeOfCharge) game.props++;
   if (id==='drill'){ const c=s.cells[0]; drills.push({ x:c[0], y:c[1], rem:0, work:0 }); }
   if (!freeOfCharge) { gold -= it.cost; sfx.thunk(); haptic('light'); if (id==='gen') { it.cost += 30; buildTray(); { const gn=gens[gens.length-1], n=crowd(gn.x+gn.w/2,gn.y+gn.h/2,gn); toast(`Generator online: +${Math.round(genEff(gn)*60)} ◆/min` + (n?` (crowded — space them ${GEN_SPACING}+ apart)`:'')); } } }
   return true;
 }
 function doAction(id) {
   const it = ITEM[id];
+  if (id==='upg') { openUpgrades(); return; }
   if (gold < it.cost) { toast('Not enough gold'); sfx.deny(); return; }
   if (id==='repair') {
     const gn = gens.reduce((a,b)=> (b.hp/b.max < a.hp/a.max ? b : a), gens[0]);
@@ -661,6 +720,7 @@ function updateShells() {
       if (SOLID[t]) {
         if (s.pen>0 && !s.breached && (t===SOIL||t===GRASS||t===SAND||t===RUBBLE)) { s.pen -= 1; s.vy*=.93; continue; }
         if (s.kind==='buster' && s.pen>0 && t!==BED && !(s.breached && t!==CONC)) { if (t===CONC) s.breached=true; s.pen -= Math.max(1, RES[t]); s.vy*=.95; continue; }   // punches through the slab, then goes off on whatever it was protecting
+        if (isMet(s.kind) && state==='play') game.meteors++;
         explode(s.x, s.y, s.r, { fire: isMet(s.kind) ? 1.5 : s.kind==='heavy'||s.kind==='buster' ? .3 : .12, shell: !isMet(s.kind) });
         dead=true;
       } else if (soldiers.some(o=>Math.abs(o.x-s.x)<1.2 && s.y>o.y-4 && s.y<o.y+1)) { explode(s.x,s.y,s.r,{fire:.1}); dead=true; }
@@ -720,10 +780,10 @@ function updateMachines() {
   for (let k=pumps.length-1;k>=0;k--) {
     const p=pumps[k]; if (g[idx(p.x,p.y)]!==PUMP) { pumps.splice(k,1); continue; }
     if (tick%3) continue;
-    const cand=[]; const R=11, px=p.x+2, py=p.y+1;
+    const cand=[]; const R=up.pump?15:11, px=p.x+2, py=p.y+1;
     for (let y=py-R;y<=py+R;y++) for (let x=px-R;x<=px+R;x++) if (inB(x,y) && g[y*W+x]===WATER && (x-px)**2+(y-py)**2<=R*R) cand.push(y*W+x);
     if (cand.length) p.spin+=.4;
-    for (let n=0;n<4 && cand.length;n++){ const j=cand.splice(rand()*cand.length|0,1)[0]; g[j]=E; }
+    for (let n=0;n<(up.pump?8:4) && cand.length;n++){ const j=cand.splice(rand()*cand.length|0,1)[0]; g[j]=E; }
   }
   for (let k=mgs.length-1;k>=0;k--) {
     const m=mgs[k]; if (g[idx(m.x,m.y)]!==MG) { mgs.splice(k,1); continue; }
@@ -733,7 +793,7 @@ function updateMachines() {
     let best=null, bd=48;
     for (const s of soldiers) { const d=Math.hypot(s.x-mx,s.y-2-my); if (d<bd && los(mx,my,s.x,s.y-2)) { bd=d; best=s; } }
     if (!best) { m.cool=10; continue; }
-    m.ang = Math.atan2(best.y-2-my, best.x-mx); m.cool=7; m.flash=3;
+    m.ang = Math.atan2(best.y-2-my, best.x-mx); m.cool=up.mg?3:7; m.flash=3;
     const hit = rand()<.55;
     if (hit) best.hp -= 1;
     tracers.push({x1:mx,y1:my,x2:best.x+(hit?0:(rand()-.5)*4),y2:best.y-2+(hit?0:(rand()-.5)*4),life:4});
@@ -747,6 +807,7 @@ function updateParticles() {
   for (let k=particles.length-1;k>=0;k--) {
     const p=particles[k]; p.life--;
     if (p.k==='smoke') { p.x+=p.vx+.01; p.y+=p.vy; p.vy*=.995; }
+    else if (p.k==='glow') { p.x+=p.vx; p.y+=p.vy; }
     else if (p.k==='spark') { p.x+=p.vx; p.y+=p.vy; p.vy+=.02; p.vx*=.96; }
     else if (p.k==='rain') { p.y+=p.vy; p.x+=p.vx; const cx=Math.floor(p.x), cy=Math.floor(p.y); if (inB(cx,cy) && SOLID[g[cy*W+cx]]) p.life=0; }
     else { // debris / gib
@@ -771,19 +832,44 @@ function popup(x,y,txt){ popups.push({x,y,txt,life:60}); }
 let digAt = null, digSoundT = 0;
 function applyDig() {
   if (!digAt) return;
-  const R=3.4, cx=digAt.x, cy=digAt.y; let any=false;
+  const R=3.4*(1+.15*up.shovel), cx=digAt.x, cy=digAt.y; let any=false;
   for (let y=Math.floor(cy-R); y<=cy+R; y++) for (let x=Math.floor(cx-R); x<=cx+R; x++) {
     if (!inB(x,y) || (x+.5-cx)**2+(y+.5-cy)**2 > R*R) continue;
     const i=y*W+x, t=g[i], need=DIGT[t];
     if (!need) continue;
-    if (!((x>0&&!SOLID[g[i-1]]) || (x<W-1&&!SOLID[g[i+1]]) || (y>0&&!SOLID[g[i-W]]) || (y<H-1&&!SOLID[g[i+W]]))) continue;
-    if (++hp[i] >= need) {
+    hp[i] += 1 + (rand() < .45*up.shovel ? 1 : 0);
+    if (hp[i] >= need) {
+      game.dug++;
       g[i]=E; hp[i]=0; any=true; if (tick%6===0 || isRock(t)) queueRockCheck(x,y,4);
       if (t===GOLD) mineOre(x,y);
       if (rand()<.25) particles.push({x:x+.5,y:y+.5,vx:(rand()-.5)*.3,vy:-rand()*.3,life:20,max:20,k:'spark',dirt:1});
     }
   }
   if (any && tick-digSoundT>5) { digSoundT=tick; sfx.dig(); }
+}
+
+// ---------- boot camp: a guided first game you can skip
+const tut = { on:false, i:0, t0:0, moved:0 };
+const TUT = [
+  { text:'Use <em>two fingers</em> to scroll around and <em>pinch</em> to zoom. Take a look around your bunker.', done:()=>tut.moved>60 },
+  { text:'<em>One finger digs</em>. Drag through the earth next to your generator to cut a tunnel.', done:()=>game.dug>=120, mark:()=>({x:gens[0].x-10,y:gens[0].y+3}) },
+  { text:'Bright yellow specks are <em>gold ore</em>. Dig into the vein to the right of the chamber.', done:()=>game.mined>=25, mark:()=>({x:gens[0].x+38,y:gens[0].y+3}) },
+  { text:'Wide tunnels cave in. Drag a <em>PROP</em> up out of the tray and drop it into your tunnel.', done:()=>game.props>=1 },
+  { text:'Tap the <em>DRILL</em> to bore 20 cells straight down for ◆10. It mines any ore it passes.', done:()=>game.drillTaps>=1, mark:()=>drills[0]&&({x:drills[0].x+3,y:drills[0].y+2}) },
+  { text:'Generators earn ◆. Drag a <em>GEN</em> out and drop it at least 30 cells from your first one.', done:()=>gens.length>=2, start:()=>{ gold=Math.max(gold,140); } },
+  { text:'Tap <em>CONCRETE</em> and draw a roof over a generator with one finger. Tap it again to go back to digging.', done:()=>game.concrete>=40, start:()=>{ gold=Math.max(gold,60); } },
+  { text:'Tap <em>UPGRADE</em> in the tray to see upgrades — better shovels, drill bits, dynamos. Close it when you\'re done.', done:()=>tut.sawUpg },
+  { text:'Here come the guns. Earth and concrete soak up the blasts — hold on!', done:()=>game.t-tut.t0>14, start:()=>{ for (let k=0;k<6;k++) schedule(2+k*1.2, ()=>spawnShell('light', pickX())); } },
+];
+function startTutorialStep() { const st=TUT[tut.i]; tut.t0=game.t; if (st.start) st.start(); $('tutStep').textContent=`BOOT CAMP ${tut.i+1}/${TUT.length}`; $('tutText').innerHTML=st.text; }
+function updateTutorial() {
+  for (let k=timers.length-1;k>=0;k--) if (game.t>=timers[k].at) { const f=timers[k].fn; timers.splice(k,1); f(); }
+  if (tut.i<TUT.length && TUT[tut.i].done()) { sfx.coin(); haptic('light'); tut.i++; if (tut.i<TUT.length) startTutorialStep(); else endTutorial(true); }
+}
+function endTutorial(done) {
+  tut.on=false; show('tut',false); localStorage.setItem('sapper.tut','1');
+  if (done) { banner('BOOT CAMP COMPLETE','NOW HOLD THE LINE'); gold += 50; }
+  game.nextEvent = game.t + 40; game.harassAt = game.t + 60; game.tOffset = game.t;
 }
 
 // ---------- director: events over time
@@ -815,12 +901,12 @@ function maybeBuster() {
   schedule(3+rand()*3, () => { banner('BUNKER BUSTER','CONCRETE WON\'T SAVE YOU'); const sh=spawnShell('buster', best+.5); sh.vx=0; sh.pen = 30 + bestN*6; });
 }
 const EVENTS = [
-  { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); const n=8+Math.round(game.intensity*4); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); maybeBuster(); } },
-  { id:'heavy',   w:2, after:80,  run(){ banner('HEAVY GUNS','DEEP PENETRATING SHELLS'); const n=2+Math.round(game.intensity); for(let k=0;k<n;k++) schedule(2.5+k*1.6+rand(), ()=>spawnShell('heavy', pickX())); maybeBuster(); } },
-  { id:'rain',    w:2, after:45,  run(){ banner('STORM FRONT','FLOODING LIKELY — PUMPS READY'); rainUntil = game.t + 14 + game.intensity*3; sfx.rain(true); } },
-  { id:'raid',    w:3, after:55,  run(){ banner('ENEMY RAID','INFANTRY ADVANCING'); const n=2+Math.round(game.intensity*1.6); for(let k=0;k<n;k++) schedule(2+k*1.4, ()=>spawnSoldier(rand()<.5?-1:1)); } },
-  { id:'tremor',  w:1, after:110, run(){ banner('TREMOR','SHORE UP YOUR TUNNELS'); schedule(2, tremor); } },
-  { id:'meteor',  w:1, after:160, run(){ banner('SOMETHING IN THE SKY','METEOR STRIKE'); schedule(2.5, ()=>spawnShell('meteor', pickX())); } },
+  { id:'barrage', w:5, after:0,   run(){ banner('ARTILLERY INBOUND','GET UNDER COVER'); game.barrages++; const n=5+Math.round(game.intensity*3); for(let k=0;k<n;k++) schedule(2+rand()*6, ()=>spawnShell(rand()<.25?'howitzer':'light', pickX())); maybeBuster(); } },
+  { id:'heavy',   w:2, after:150,  run(){ banner('HEAVY GUNS','DEEP PENETRATING SHELLS'); game.barrages++; const n=2+Math.round(game.intensity); for(let k=0;k<n;k++) schedule(2.5+k*1.6+rand(), ()=>spawnShell('heavy', pickX())); maybeBuster(); } },
+  { id:'rain',    w:2, after:90,  run(){ banner('STORM FRONT','FLOODING LIKELY — PUMPS READY'); rainUntil = game.t + 14 + game.intensity*3; sfx.rain(true); } },
+  { id:'raid',    w:3, after:110,  run(){ banner('ENEMY RAID','INFANTRY ADVANCING'); game.raids++; const n=2+Math.round(game.intensity*1.6); for(let k=0;k<n;k++) schedule(2+k*1.4, ()=>spawnSoldier(rand()<.5?-1:1)); } },
+  { id:'tremor',  w:1, after:180, run(){ banner('TREMOR','SHORE UP YOUR TUNNELS'); schedule(2, tremor); } },
+  { id:'meteor',  w:1, after:240, run(){ banner('SOMETHING IN THE SKY','METEOR STRIKE'); schedule(2.5, ()=>spawnShell('meteor', pickX())); } },
 ];
 function tremor() {
   shake = 16; sfx.boom(14,.6); haptic('heavy');
@@ -828,19 +914,21 @@ function tremor() {
     if ((g[i]===SOIL||g[i]===GRASS) && !SOLID[g[i+W]] && rand() < (sup[i]?.15:.8)) g[i]=RUBBLE; }
 }
 function updateDirector() {
-  game.intensity = 1 + game.t/75;
+  if (tut.on) { updateTutorial(); return; }
+  game.intensity = 1 + game.t/110;
   for (let k=timers.length-1;k>=0;k--) if (game.t>=timers[k].at) { const f=timers[k].fn; timers.splice(k,1); f(); }
-  if (game.t >= game.harassAt) { spawnShell(game.t>200 && rand()<.3 ? 'howitzer':'light', pickX()); game.harassAt = game.t + Math.max(1.1, 6 - game.t/35)*(.6+rand()*.8); }
+  if (game.t >= game.harassAt) { spawnShell(game.t>200 && rand()<.3 ? 'howitzer':'light', pickX()); game.harassAt = game.t + Math.max(1.6, 8 - game.t/45)*(.6+rand()*.8); }
   if (game.t >= game.nextEvent) {
     const pool = EVENTS.filter(e=>game.t>=e.after);
     let tw = pool.reduce((a,e)=>a+e.w,0), r=rand()*tw, ev=pool[0];
     for (const e of pool) { r-=e.w; if (r<=0) { ev=e; break; } }
     ev.run(); game.events++;
-    if (game.events===4 || (game.events>4 && game.events%6===4)) schedule(6, () => { banner('GIANT METEOR','IT\'S GOING TO LEAVE A HOLE'); schedule(2.5, ()=>spawnShell('giant', pickX())); });
+    if (game.events===5 || (game.events>5 && game.events%6===5)) schedule(6, () => { banner('GIANT METEOR','IT\'S GOING TO LEAVE A HOLE'); schedule(2.5, ()=>spawnShell('giant', pickX())); });
     if (game.events>1) { gold += 15; schedule(9, ()=>toast('Held the line  +15 ◆')); }
-    game.nextEvent = game.t + Math.max(11, 30 - game.t/14) + rand()*6;
+    game.nextEvent = game.t + Math.max(18, 45 - game.t/12) + rand()*8;
   }
   if (game.t < rainUntil) rainTick(2+game.intensity); else if (sfx.raining) sfx.rain(false);
+  if (rand()<.25) { const x=rand()*W|0, y=Math.floor(cam.y + rand()*viewRows()); if (y>SKY+100 && inB(x,y) && g[y*W+x]===E && bgc[y*W+x]) particles.push({x:x+.5,y,vx:(rand()-.5)*.03,vy:-.03,life:120,max:120,k:'glow'}); }
   if (rand()<.002) flares.push({x:10+rand()*(W-20), y:4+rand()*10, vx:(rand()-.5)*.03, life:900});
 }
 function rainTick(rate) {
@@ -936,6 +1024,7 @@ function render() {
         }
       }
       if (lit>1.7) lit=1.7;
+      if (y > SKY+60) { const gl=Math.min(1,(y-SKY-60)/260); G += gl*18*(1+Math.sin((x*.3+y*.2+tick*.03))*.3); R -= gl*6; }
       R = R*lit + L*22; G = G*lit + L*10; B = B*lit*.9;
       buf[rr+x] = 0xff000000 | ((B>255?255:B<0?0:B)<<16) | ((G>255?255:G<0?0:G)<<8) | (R>255?255:R<0?0:R);
     }
@@ -1000,6 +1089,7 @@ function drawEntities(s) {
     else if (p.k==='spark') px(p.x,p.y,1,1, p.dirt ? '#5a4632' : a>.5?'#ffe08a':'#e0642a');
     else if (p.k==='rain') { ctx.fillStyle='#8aa6c066'; ctx.fillRect(p.x*s,p.y*s,Math.max(1,s*.3),s*1.6); }
     else if (p.k==='gib') px(p.x,p.y,1,1,'#5c6650');
+    else if (p.k==='glow') { ctx.fillStyle=`rgba(120,240,110,${a*.7})`; ctx.fillRect(p.x*s,p.y*s,Math.max(1,s*.6),Math.max(1,s*.6)); }
     else px(p.x,p.y,1,1, p.t===SAND?'#a88a58':'#6a5440');
   }
   for (const f of flares) { px(f.x,f.y,1,1,'#fff6d0'); }
@@ -1012,15 +1102,15 @@ function drawEntities(s) {
   if (gh && !gh.cells.length && ghostPos) { ctx.strokeStyle='rgba(220,80,60,.8)'; ctx.lineWidth=Math.max(1,dpr); const gx=Math.floor(ghostPos.x)*s, gy=Math.floor(ghostPos.y)*s; ctx.strokeRect(gx-4*s,gy-4*s,9*s,9*s); ctx.beginPath(); ctx.moveTo(gx-4*s,gy-4*s); ctx.lineTo(gx+5*s,gy+5*s); ctx.moveTo(gx+5*s,gy-4*s); ctx.lineTo(gx-4*s,gy+5*s); ctx.stroke(); }
   if (gh) for (const c of gh.cells) { ctx.fillStyle = !c.ok ? 'rgba(200,60,40,.35)' : gh.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); }
   if (gh && dragItem && dragItem.id==='gen' && ghostPos) {
-    ctx.save(); ctx.strokeStyle='rgba(230,190,74,.55)'; ctx.lineWidth=Math.max(1,dpr); ctx.setLineDash([s*2,s*2]); ctx.beginPath();
-    for (let x=0;x<W;x++) { const y=(surfOrig[x]+GEN_MAX)*s; x ? ctx.lineTo(x*s,y) : ctx.moveTo(0,y); } ctx.stroke(); ctx.restore();
     const c0 = gh.cells[0], n = crowd(c0[0]+GEN_W/2, c0[1]+GEN_H/2, null), r = genRate(c0[0]+GEN_W/2, c0[1]+GEN_H)/(1+n), lx = c0[0]+GEN_W/2, ly = c0[1]-2;
+    { const gl = glowLoss(Math.max(0, c0[1]+GEN_H - surfOrig[Math.max(0,Math.min(W-1,c0[0]+7))])); if (gl>.05) { ctx.font=`bold ${Math.round(Math.max(13*dpr, s*3))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center'; ctx.fillStyle='#7ee06a'; ctx.fillText(`GLOW −${Math.round(gl*100)}%`, lx*s, (ly+GEN_H+6)*s); } }
     if (n && r>0) { ctx.font=`bold ${Math.round(Math.max(15*dpr, s*3.5))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center'; ctx.fillStyle='#e05a40'; ctx.fillText(`CROWDED ÷${n+1}`, lx*s, (ly-4)*s); }
     ctx.font = `bold ${Math.round(Math.max(15*dpr, s*3.5))}px ui-monospace,Menlo,monospace`; ctx.textAlign='center';
     ctx.fillStyle='#000a'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s+1, ly*s+1);
     ctx.fillStyle = r>0 ? '#f0d68a' : '#e05a40'; ctx.fillText(r>0 ? `+${Math.round(r*60)} ◆/min` : 'TOO DEEP', lx*s, ly*s);
   }
-  if (digAt && state==='play') { ctx.strokeStyle='#e8d6a088'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.arc(digAt.x*s,digAt.y*s,3.4*s,0,6.29); ctx.stroke(); }
+  if (tut.on && TUT[tut.i] && TUT[tut.i].mark) { const m=TUT[tut.i].mark(); if (m) { const pr=4+Math.sin(tick*.15)*1.5; ctx.strokeStyle='#f0d68a'; ctx.lineWidth=Math.max(2,dpr*1.5); ctx.beginPath(); ctx.arc(m.x*s,m.y*s,pr*s,0,6.29); ctx.stroke(); } }
+  if (digAt && state==='play') { ctx.strokeStyle='#e8d6a088'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.arc(digAt.x*s,digAt.y*s,3.4*(1+.15*up.shovel)*s,0,6.29); ctx.stroke(); }
 }
 function drawOverlayUI(s) {
   // incoming shell markers at the top edge
@@ -1041,6 +1131,7 @@ function renderMini() {
   }
   mctx.putImageData(mimg,0,0);
   mctx.fillStyle='#e04a30'; for (const gn of gens) mctx.fillRect(gn.x/4,gn.y/4,gn.w/4,2);
+  mctx.fillStyle='#6ff'; for (const d of drills) mctx.fillRect(d.x/4,d.y/4,2,2);
   mctx.fillStyle='#ff4'; for (const s of soldiers) mctx.fillRect(s.x/4|0, s.y/4-1|0, 1, 1);
   mctx.strokeStyle='#e8d6a0'; mctx.lineWidth=1; mctx.strokeRect(cam.x/4+.5, cam.y/4+.5, cv.width/scale/4-1, (cv.height-trayPx)/scale/4);
 }
@@ -1082,12 +1173,13 @@ function haptic(kind){ try { window.webkit.messageHandlers.haptic.postMessage(ki
 const $ = id => document.getElementById(id);
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toast.t); toast.t=setTimeout(()=>t.style.opacity=0, 2600); }
 const ICONS = {
+  upg:['...#....','..###...','.#####..','###.###.','...#....','...#....','...#....','........'],
   repair:['........','...##...','...##...','.######.','.######.','...##...','...##...','........'],
 };
 function drawIcon(cvs, id) {
   const c=cvs.getContext('2d'); c.clearRect(0,0,16,12);
   const mat = {prop:TIMBER,bags:BAGS,concrete:CONC,lamp:LAMP,pump:PUMP,mg:MG}[id];
-  if (ICONS[id]) { c.fillStyle = '#c0503a'; ICONS[id].forEach((row,y)=>[...row].forEach((ch,x)=>{ if(ch==='#') c.fillRect(x+4,y+2,1,1); })); return; }
+  if (ICONS[id]) { c.fillStyle = id==='upg' ? '#e6bf4a' : '#c0503a'; (ICONS[id]).forEach((row,y)=>[...row].forEach((ch,x)=>{ if(ch==='#') c.fillRect(x+4,y+2,1,1); })); return; }
   const col = (t,v)=>`rgb(${palR[t*8+v]},${palG[t*8+v]},${palB[t*8+v]})`;
   if (id==='prop') { for(let x=2;x<14;x++){ c.fillStyle=col(TIMBER,(x*3)&7); c.fillRect(x,2,1,2); } for(let y=4;y<11;y++){ c.fillStyle=col(TIMBER,y&7); c.fillRect(2,y,1,1); c.fillRect(13,y,1,1);} }
   else if (id==='lamp') { c.fillStyle='#555'; c.fillRect(7,0,1,5); c.fillStyle='#ffe196'; c.fillRect(6,5,3,3); c.fillStyle='#ffe19633'; c.fillRect(3,4,9,7); }
@@ -1103,7 +1195,7 @@ function buildTray() {
     const el=document.createElement('div'); el.className='item'; el.dataset.id=it.id;
     const ic=document.createElement('canvas'); ic.width=16; ic.height=12; drawIcon(ic,it.id);
     el.append(ic); const b=document.createElement('b'); b.textContent=it.name; el.append(b);
-    const i=document.createElement('i'); i.textContent = it.kind==='draw' ? 'DRAW' : '◆'+it.cost; el.append(i);
+    const i=document.createElement('i'); i.textContent = it.kind==='draw' ? 'DRAW' : it.id==='upg' ? 'SHOP' : '◆'+it.cost; el.append(i);
     tray.append(el);
   }
 }
@@ -1133,7 +1225,7 @@ function paintConcrete(p) {
       if (!free(x,y) || (x+.5-cx)**2+(y+.5-cy)**2 > PAINT_R*PAINT_R) continue;
       if (paintAcc + PAINT_COST >= 1 && gold < 1) { if (!paintConcrete.warned) { paintConcrete.warned=true; toast('Out of gold'); sfx.deny(); } paintLast=p; return; }
       paintAcc += PAINT_COST; if (paintAcc >= 1) { paintAcc -= 1; gold -= 1; }
-      setCell(x,y,CONC); if (++paintN % 8 === 0) sfx.dig();
+      setCell(x,y,CONC); game.concrete++; if (++paintN % 8 === 0) sfx.dig();
     }
   }
   paintLast = p;
@@ -1177,7 +1269,7 @@ addEventListener('pointermove', e => {
   else if (gesture==='pan2') {
     if (pointers.size<2) { pinch=null; return; }
     const n = pinchState();
-    if (pinch) { const wx=cam.x+pinch.x*dpr/scale, wy=cam.y+pinch.y*dpr/scale; cam.zoom=Math.max(ZMIN,Math.min(3.5,cam.zoom*n.d/pinch.d)); scale=cv.width/VIEWW*cam.zoom; cam.x=wx-n.x*dpr/scale; cam.y=wy-n.y*dpr/scale; clampCam(); }
+    if (pinch) { tut.moved += Math.abs(n.x-pinch.x)+Math.abs(n.y-pinch.y)+Math.abs(n.d-pinch.d); const wx=cam.x+pinch.x*dpr/scale, wy=cam.y+pinch.y*dpr/scale; cam.zoom=Math.max(ZMIN,Math.min(3.5,cam.zoom*n.d/pinch.d)); scale=cv.width/VIEWW*cam.zoom; cam.x=wx-n.x*dpr/scale; cam.y=wy-n.y*dpr/scale; clampCam(); }
     pinch = n;
   }
   else if (gesture==='dig') digAt = toWorld(e.clientX,e.clientY);
@@ -1198,7 +1290,7 @@ function endPointer(e) {
 }
 addEventListener('pointerup', endPointer); addEventListener('pointercancel', endPointer);
 $('tray').addEventListener('pointerdown', e => { const el=e.target.closest('.item'); if (!el || state!=='play') return; e.preventDefault(); if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); sfx.init(); dragItem={ id:el.dataset.id, pid:e.pointerId, sx:e.clientX, sy:e.clientY, active:false }; if (ITEM[el.dataset.id].kind==='action') dragItem.noDrag=true; });
-cv.addEventListener('wheel', e => { if (state!=='play') return; e.preventDefault(); if (e.ctrlKey) zoomAt(cam.zoom*Math.exp(-e.deltaY*.01), e.clientX, e.clientY); else { cam.x += e.deltaX*dpr/scale*.5; cam.y += e.deltaY*dpr/scale*.5; clampCam(); } }, {passive:false});
+cv.addEventListener('wheel', e => { if (state!=='play') return; e.preventDefault(); tut.moved += Math.abs(e.deltaY)/4; if (e.ctrlKey) zoomAt(cam.zoom*Math.exp(-e.deltaY*.01), e.clientX, e.clientY); else { cam.x += e.deltaX*dpr/scale*.5; cam.y += e.deltaY*dpr/scale*.5; clampCam(); } }, {passive:false});
 document.addEventListener('touchmove', e => { if (!e.target.closest('.card')) e.preventDefault(); }, {passive:false});
 document.addEventListener('gesturestart', e => e.preventDefault());
 mini.addEventListener('pointerdown', e => { const r=mini.getBoundingClientRect(); const jump = ev => { cam.y = (ev.clientY-r.top)/r.height*H - viewRows()/2; cam.vy=0; clampCam(); }; jump(e); const mv=ev=>jump(ev), up=()=>{removeEventListener('pointermove',mv); removeEventListener('pointerup',up);}; addEventListener('pointermove',mv); addEventListener('pointerup',up); e.stopPropagation(); });
@@ -1214,11 +1306,14 @@ function startDemo() {
   game.t=0; cam.y = -10; cam.x = 0; cam.zoom = 1; demoStart = tick;
 }
 let demoStart=0;
-function startGame() {
+function startGame(opts={}) {
+  if (opts instanceof Event) opts = {};
   sfx.init(); sfx.rain(false);
   demo = false; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(false);
-  Object.assign(game, { t:0, mined:0, kills:0, nextEvent:22, harassAt:30, intensity:1, events:0 });
+  Object.assign(game, { t:0, tOffset:0, mined:0, kills:0, nextEvent:50, harassAt:75, intensity:1, events:0, meteors:0, raids:0, barrages:0, dug:0, props:0, drillTaps:0, concrete:0 });
+  for (const k in up) up[k]=0;
+  tut.on = !!opts.tutorial || localStorage.getItem('sapper.tut')!=='1'; tut.i=0; tut.moved=0; tut.sawUpg=false;
   gold = 140; ITEM.gen.cost = 100; drawMode = false; state='play';
   ['menu','help','over','pause'].forEach(s=>show(s,false)); show('hud',true); show('tray',true); show('mini',true);
   cam.zoom=1; cam.x=0; buildTray(); resize();
@@ -1232,32 +1327,84 @@ function startGame() {
     [20,'More GENERATORs = more ◆. Shallow pays best, but that is where shells land.'],
     [26,'Earth and CONCRETE absorb blasts.'],
   ];
-  for (const [t,msg] of tips) schedule(t, ()=>toast(msg));
+  if (tut.on) { show('tut',true); startTutorialStep(); }
+  else { show('tut',false); for (const [t,msg] of tips) schedule(t, ()=>toast(msg)); }
 }
 function gameOver() {
   state='dying';
   haptic('error'); $('banner').style.opacity=0; $('toast').style.opacity=0;
-  const t=Math.floor(game.t), best = Math.max(game.best, t), isBest = t>game.best && t>0;
+  show('tut',false); tut.on=false;
+  const t=Math.floor(game.t), best = Math.max(game.best, t);
   game.best = best; localStorage.setItem('sapper.best', best);
-  const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  const sc = scoreOf(), bestScore = Math.max(+(localStorage.getItem('sapper.bestScore')||0), sc), isBest = sc>=bestScore && sc>0;
+  localStorage.setItem('sapper.bestScore', bestScore);
   setTimeout(() => {
+    const snap = document.createElement('canvas'); snap.width=cv.width; snap.height=cv.height; snap.getContext('2d').drawImage(cv,0,0);
     state='over'; sfx.rain(false);
-    $('overStats').innerHTML = `<p>HELD FOR <em>${fmt(t)}</em>${isBest?' — NEW RECORD':''}</p><p>BEST <em>${fmt(best)}</em></p><p>GOLD MINED <em>${game.mined}</em> · RAIDERS STOPPED <em>${game.kills}</em></p>`;
+    $('overStats').innerHTML = `<div class="bigscore">${sc.toLocaleString()}</div><p>${isBest?'<em>NEW BEST SCORE</em>':'BEST '+bestScore.toLocaleString()}</p>`+
+      `<p>HELD FOR <em>${fmtT(t)}</em></p><p><em>${game.meteors}</em> METEOR STRIKES · <em>${game.raids}</em> RAIDS · <em>${game.barrages}</em> BARRAGES</p><p><em>${game.kills}</em> RAIDERS STOPPED · <em>◆${game.mined.toLocaleString()}</em> MINED</p>`;
+    buildShareCard(snap, sc, t);
     show('over',true); show('tray',false); show('hud',false); show('mini',false);
   }, 1800);
 }
+const fmtT = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+function scoreOf(){ return Math.floor(game.t)*5 + game.events*100 + game.kills*25 + game.meteors*150 + Math.floor(game.mined/2); }
+
+// ---------- share card: an image + text for Signal, WhatsApp, etc.
+const SHARE_URL = 'https://jonathanwilson1.github.io/Sapper-iOS/';
+let shareBlob = null, shareText = '';
+function buildShareCard(snap, sc, t) {
+  const c = document.createElement('canvas'); c.width=1080; c.height=1350; const x = c.getContext('2d');
+  x.fillStyle='#0d0a07'; x.fillRect(0,0,1080,1350);
+  // the moment the line fell, cropped to fill the top
+  const h=760, r=Math.max(1080/snap.width, h/snap.height), sw=1080/r, sh2=h/r;
+  x.imageSmoothingEnabled=false; x.drawImage(snap, (snap.width-sw)/2, Math.max(0,(snap.height-sh2)*.35), sw, sh2, 0, 0, 1080, h);
+  const gr=x.createLinearGradient(0,h-260,0,h); gr.addColorStop(0,'#0d0a0700'); gr.addColorStop(1,'#0d0a07'); x.fillStyle=gr; x.fillRect(0,h-260,1080,260);
+  const tg=x.createLinearGradient(0,0,0,260); tg.addColorStop(0,'#0d0a07ee'); tg.addColorStop(1,'#0d0a0700'); x.fillStyle=tg; x.fillRect(0,0,1080,260);
+  x.drawImage($('title'), 0,0,96,26, 204, 40, 96*7, 26*7);
+  x.fillStyle='#0008'; x.fillRect(0,0,1080,6);
+  const mono='ui-monospace,Menlo,"Courier New",monospace';
+  x.textAlign='center'; x.fillStyle='#cdb98a'; x.font=`700 34px ${mono}`; x.fillText('I HELD THE LINE FOR', 540, 800);
+  x.fillStyle='#f0d68a'; x.font=`900 120px ${mono}`; x.fillText(fmtT(t), 540, 920);
+  x.fillStyle='#e6bf4a'; x.font=`900 56px ${mono}`; x.fillText(`SCORE ${sc.toLocaleString()}`, 540, 1000);
+  const rows=[[game.meteors,'METEOR STRIKES SURVIVED'],[game.raids,'WAVES OF RAIDERS'],[game.barrages,'ARTILLERY BARRAGES'],[game.kills,'RAIDERS STOPPED']];
+  for (let k=0;k<rows.length;k++) rows[k][0]=rows[k][0]||0;
+  x.font=`800 34px ${mono}`; rows.forEach(([n,l],k)=>{ const yy=1060+k*46; x.textAlign='right'; x.fillStyle='#f0d68a'; x.fillText(String(n),330,yy); x.textAlign='left'; x.fillStyle='#d8c9a3'; x.fillText(l,360,yy); });
+  x.textAlign='center'; x.fillStyle='#cdb98a'; x.font=`800 32px ${mono}`; x.fillText('CAN YOU HOLD THE LINE?', 540, 1285);
+  x.fillStyle='#8a7a5a'; x.font=`700 26px ${mono}`; x.fillText(SHARE_URL.replace('https://',''), 540, 1325);
+  shareText = `I held the line for ${fmtT(t)} in SAPPER — survived ${game.meteors} meteor strike${game.meteors===1?'':'s'} and ${game.raids} wave${game.raids===1?'':'s'} of raiders. Score ${sc.toLocaleString()}. Can you beat it? ${SHARE_URL}`;
+  $('sharePreview').src = c.toDataURL('image/png');
+  shareBlob = null; c.toBlob(b => { shareBlob = b; }, 'image/png');
+}
+async function shareScore() {
+  const dataUrl = $('sharePreview').src;
+  try { if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.share) { window.webkit.messageHandlers.share.postMessage({ image:dataUrl, text:shareText }); return; } } catch(e) {}
+  const file = shareBlob && new File([shareBlob], 'sapper-score.png', { type:'image/png' });
+  try {
+    if (file && navigator.canShare && navigator.canShare({ files:[file] })) { await navigator.share({ files:[file], text:shareText }); return; }
+    if (navigator.share) { await navigator.share({ text:shareText }); return; }
+  } catch(e) { if (e && e.name==='AbortError') return; }
+  const a=document.createElement('a'); a.href=dataUrl; a.download='sapper-score.png'; a.click();
+  try { await navigator.clipboard.writeText(shareText); toast('Image saved, score text copied'); } catch(e) {}
+}
+
 function pause(){ if (state!=='play') return; state='paused'; show('pause',true); }
 function resume(){ state='play'; show('pause',false); last=performance.now(); }
-function toMenu(){ ['over','pause','help','hud','tray','mini'].forEach(s=>show(s,false)); show('menu',true); updateBest(); startDemo(); resize(); }
-function updateBest(){ const b=game.best; $('bestStat').textContent = b ? `BEST: HELD ${Math.floor(b/60)}:${String(b%60).padStart(2,'0')}` : ''; }
-$('startBtn').onclick = startGame;
+function toMenu(){ ['over','pause','help','hud','tray','mini','tut','upg'].forEach(s=>show(s,false)); show('menu',true); updateBest(); startDemo(); resize(); }
+function updateBest(){ const b=game.best, bs=+(localStorage.getItem('sapper.bestScore')||0); $('bestStat').textContent = b ? `BEST SCORE ${bs.toLocaleString()} · HELD ${fmtT(b)}` : ''; }
+$('startBtn').onclick = () => startGame();
+$('campBtn').onclick = () => startGame({ tutorial:true });
+$('tutSkip').onclick = () => { endTutorial(false); toast('Tutorial skipped — good luck'); };
+$('shareBtn').onclick = shareScore;
+$('upgClose').onclick = () => { show('upg',false); state='play'; last=performance.now(); tut.sawUpg = true; };
+$('upgList').addEventListener('click', e => { const b=e.target.closest('button[data-up]'); if (b) buyUpgrade(b.dataset.up); });
 $('helpBtn').onclick = () => { show('menu',false); show('help',true); };
 $('helpBack').onclick = () => { show('help',false); if (state==='menu') show('menu',true); else show('pause',true); };
 $('soundBtn').onclick = () => { sfx.init(); sfx.setOn(!sfx.on); $('soundBtn').textContent = 'Sound: '+(sfx.on?'On':'Off'); };
 $('soundBtn').textContent = 'Sound: '+(sfx.on?'On':'Off');
 $('pauseBtn').onclick = pause; $('resumeBtn').onclick = resume;
-$('restartBtn').onclick = startGame; $('quitBtn').onclick = toMenu;
-$('againBtn').onclick = startGame; $('overMenuBtn').onclick = toMenu;
+$('restartBtn').onclick = () => startGame(); $('quitBtn').onclick = toMenu;
+$('againBtn').onclick = () => startGame(); $('overMenuBtn').onclick = toMenu;
 $('menu').addEventListener('pointerdown', () => sfx.init());
 
 // ---------- title art: pixel text, rusted
@@ -1305,7 +1452,7 @@ function frame(now) {
   render();
   if (state==='play') { updateHUD(); if (++frameN % 12 === 0) renderMini(); }
 }
-window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
+window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, tut, up, get shareText(){return shareText;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
 updateBest(); startDemo(); resize(); requestAnimationFrame(frame);
 </script>
 </body>
