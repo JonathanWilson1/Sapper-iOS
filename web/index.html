@@ -444,7 +444,7 @@ function openUpgrades(){ if (state!=='play') return; state='paused'; renderUpgra
 
 // ---------- rooms: dig a space, drop one in; each works on its own
 const ROOMDEFS = [
-  { id:'gen',      name:'GENERATOR',      desc:'Earns ◆. Keep them 30+ cells apart; shallow pays most', cost:100, w:GEN_W, h:GEN_H },
+  { id:'gen',      name:'GENERATOR',      desc:'Earns ◆. Keep them 30+ cells apart; shallow pays most', cost:100, w:GEN_W+4, h:GEN_H+3 },
   { id:'pump',     name:'PUMP',           desc:'Drains floodwater nearby',                 cost:40,  w:4, h:3 },
   { id:'miners',   name:'MINERS\' HUT',    desc:'3 more miners to dig what you mark',        cost:100, w:16, h:7 },
   { id:'hospital', name:'FIELD HOSPITAL', desc:'Slowly repairs generators within 40 cells', cost:80,  w:16, h:7 },
@@ -533,7 +533,12 @@ function siteStamp(id, cx, cy) {
   if (!snapped && clearAt(y0) && !floorAt(y0)) for (let k=1;k<48;k++) { if (!clearAt(y0+k)) break; if (floorAt(y0+k)) { y0+=k; break; } }
   const cells=[]; let ok=true, solid=0, onSite=false, below=false;
   for (let y=y0;y<y0+h;y++) for (let x=x0;x<x0+w;x++) {
-    const c=[x,y,t];
+    let ct = t;
+    if (id==='gen') {   // posts and a two-row beam round the edge, an open bay, the dynamo, a concrete pad
+      const lx=x-x0, ly=y-y0;
+      ct = ly===h-1 ? CONC : (ly<2 || lx===0 || lx===w-1) ? PROPBG : (lx>=2 && lx<w-2) ? HQ : E;
+    }
+    const c=[x,y,ct];
     if (!inB(x,y)) { c.ok=false; ok=false; cells.push(c); continue; }
     const tt=g[y*W+x]; c.ok = !SOLID[tt] || DIGT[tt]>0;
     if (siteCovers(x,y)) { c.ok=false; onSite=true; }
@@ -579,12 +584,13 @@ let sites = [];
 const siteCovers = (x,y) => sites.some(st => x>=st.x0 && x<=st.x1 && y>=st.y0 && y<=st.y1);
 function commitStructure(id, cells) {
   for (const c of cells) { const i=idx(c[0],c[1]), t=g[i];
+    if (c[2]===E) continue;
     if (c[2]===PROPBG) { if (!SOLID[t]) prop[i]=1; }
     else if (t===E||t===WATER||t===FIRE||t===RUBBLE||t===SAND) setCell(c[0],c[1],c[2]); }
   const c=cells[0], it=ITEM[id];
   if (id==='pump') pumps.push({ x:c[0], y:c[1], spin:0 });
   if (id==='mg')   mgs.push({ x:c[0], y:c[1], cool:0, ang:-Math.PI/2, flash:0 });
-  if (id==='gen')  addGen(c[0],c[1]);
+  if (id==='gen') { const m = cells.find(q=>q[2]===HQ) || c; addGen(m[0],m[1]); }
   if (id==='drill') drills.push({ x:c[0], y:c[1], rem:0, work:0 });
   if (it && it.kind==='room' && id!=='gen' && id!=='pump') rooms.push({ kind:id, x:c[0], y:c[1], w:it.w, h:it.h, fresh:id==='miners' });
 }
@@ -633,6 +639,7 @@ function place(id, cx, cy, freeOfCharge) {
     sites.push({ id, cells, x0, x1, y0, y1, work:0, need: BUILD_TIME[id] || 10, clear:false });
     for (const c of cells) { const i=idx(c[0],c[1]); if (SOLID[g[i]] && DIGT[g[i]]) mark[i]=1; }   // the footprint is dug out first
     connectSite(sites[sites.length-1]);
+    for (const c of cells) if (c[1]<=y0+1 || c[0]===x0 || c[0]===x1) prop[idx(c[0],c[1])]=1;   // temporary shoring: holds the roof while it's dug out
     it.cost += id==='gen' ? 30 : id==='pump' ? 0 : id==='listen' ? 20 : 40;
     toast(cells.some(c=>SOLID[g[idx(c[0],c[1])]]) ? `${it.name}: miners will dig out the site, then build it` : `${it.name}: site marked — your miners will build it`);
     return true;
@@ -1562,7 +1569,8 @@ function drawLoupe() {
   ctx.strokeStyle='#0008'; ctx.lineWidth=1*dpr; ctx.beginPath(); ctx.arc(cx,cy,R+2*dpr,0,6.29); ctx.stroke();
 }
 function genLabel(c0, s) {
-  const n = crowd(c0[0]+GEN_W/2, c0[1]+GEN_H/2, null), r = genRate(c0[0]+GEN_W/2, c0[1]+GEN_H)/(1+n), lx = c0[0]+GEN_W/2, ly = c0[1]-2;
+  const fw = ITEM.gen.w, fh = ITEM.gen.h;
+  const n = crowd(c0[0]+fw/2, c0[1]+fh/2, null), r = genRate(c0[0]+fw/2, c0[1]+fh)/(1+n), lx = c0[0]+fw/2, ly = c0[1]-2;
   const gl = glowLoss(Math.max(0, c0[1]+GEN_H - surfOrig[Math.max(0,Math.min(W-1,c0[0]+7))]));
   ctx.textAlign='center';   // called inside the world-space transform
   if (gl>.05) { ctx.font=`bold ${Math.round(Math.max(13*dpr, s*3))}px ui-monospace,Menlo,monospace`; ctx.fillStyle='#7ee06a'; ctx.fillText(`GLOW −${Math.round(gl*100)}%`, lx*s, (ly+GEN_H+6)*s); }
