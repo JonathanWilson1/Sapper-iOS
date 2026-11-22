@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0b0907">
 <title>SAPPER — Hold the Line</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="Sapper">
 <style>
   :root{--ink:#d8c9a3;--brass:#c8a24a;--blood:#b33a2a;--panel:#15110dee;--edge:#3a2f22}
   html,body{margin:0;height:100%;background:#0b0907;overflow:hidden;touch-action:none;
@@ -1459,6 +1462,7 @@ function frame(now) {
 }
 window.__sapper = { queueRock: queueRockCheck, fast(n){ for(let k=0;k<n;k++) update(); }, get soldiers(){return soldiers;}, get state(){return state;}, game, get gens(){return gens;}, tut, up, get shareText(){return shareText;}, get drills(){return drills;}, pressDrill, g, startGame, place, spawnShell, spawnSoldier, explode, get gold(){return gold;}, set gold(v){gold=v;}, cam, get tick(){return tick;} };
 updateBest(); startDemo(); resize(); requestAnimationFrame(frame);
+if ('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
 </html>
