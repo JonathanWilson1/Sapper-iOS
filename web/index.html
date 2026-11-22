@@ -125,7 +125,7 @@
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>CONCRETE</em> soaks up shellfire — tap it, then draw with one finger.</p>
     <p>Generators, pumps and rooms come from the <em>ROOM</em> menu. Place one in open space or straight into the earth — it snaps into line with its neighbours. Your miners dig out the site, build it, then board up the gap above it so tunnels stay neat. Rooms and pumps hold up the ceiling like props. Marked <em>concrete</em> can be dug out too.</p>
     <p><em>PUMP</em> drains floods. <em>MG NEST</em> cuts down raiders.</p>
-    <p><em>ROOMS</em>: a <em>Field Hospital</em> slowly repairs nearby generators and sends a medic to carry wounded miners back for treatment (they bleed out after 45s otherwise), a <em>Mine Head</em> makes nearby ore pay 50% more, and a <em>Magazine</em> pays ◆40 every wave — but blows up if it's hit. A <em>Listening Post</em> hears enemy tunnellers.</p>
+    <p><em>ROOMS</em>: a <em>Field Hospital</em> sends a medic to carry wounded miners back for treatment (they bleed out after 45s otherwise) and slowly patches up nearby generators, a <em>Mine Head</em> makes nearby ore pay 50% more, and a <em>Magazine</em> pays ◆40 every wave — but blows up if it's hit. A <em>Listening Post</em> hears enemy tunnellers.</p>
     <p><em>ENEMY TUNNELLERS</em> dig toward your generators to plant mines. Their tunnels are hidden — a listening post reveals them. Dig into one to stop it.</p>
     <p><em>DAILY CHALLENGE</em>: everyone gets the same map and attack order each day. Compare scores with friends.</p>
     <p>Drag items up out of the tray to place them. <em>Pinch</em> to zoom.</p>
@@ -447,7 +447,7 @@ const ROOMDEFS = [
   { id:'gen',      name:'GENERATOR',      desc:'Earns ◆. Keep them 30+ cells apart; shallow pays most', cost:100, w:GEN_W+4, h:GEN_H+5 },
   { id:'pump',     name:'PUMP',           desc:'Drains floodwater nearby',                 cost:40,  w:4, h:3 },
   { id:'miners',   name:'MINERS\' HUT',    desc:'3 more miners to dig what you mark',        cost:100, w:16, h:7 },
-  { id:'hospital', name:'FIELD HOSPITAL', desc:'Slowly repairs generators within 40 cells', cost:80,  w:16, h:7 },
+  { id:'hospital', name:'FIELD HOSPITAL', desc:'A medic carries wounded miners in and treats them. Also patches up nearby generators', cost:80,  w:16, h:7 },
   { id:'mine',     name:'MINE HEAD',      desc:'Ore dug within 30 cells pays 50% more',     cost:90,  w:16, h:7 },
   { id:'magazine', name:'MAGAZINE',       desc:'Pays ◆40 every wave — explodes if hit',    cost:50,  w:16, h:7 },
   { id:'listen',   name:'LISTENING POST', desc:'Hears enemy tunnellers within 90 cells',   cost:40,  w:3, h:3 },
