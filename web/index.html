@@ -124,7 +124,7 @@
     <p>Unbraced tunnel ceilings <em>crumble</em>. Drop a <em>PROP</em> into a tunnel — it fits itself wall to wall.</p>
     <p><em>Sand</em> pours. <em>Water</em> floods. <em>CONCRETE</em> soaks up shellfire — tap it, then draw with one finger.</p>
     <p><em>PUMP</em> drains floods. <em>MG NEST</em> cuts down raiders.</p>
-    <p><em>ROOMS</em>: a <em>Field Hospital</em> slowly repairs nearby generators, a <em>Mine Head</em> makes nearby ore pay 50% more, and a <em>Magazine</em> pays ◆40 every wave — but blows up if it's hit. A <em>Listening Post</em> hears enemy tunnellers.</p>
+    <p><em>ROOMS</em>: a <em>Field Hospital</em> slowly repairs nearby generators and sends a medic to carry wounded miners back for treatment (they bleed out after 45s otherwise), a <em>Mine Head</em> makes nearby ore pay 50% more, and a <em>Magazine</em> pays ◆40 every wave — but blows up if it's hit. A <em>Listening Post</em> hears enemy tunnellers.</p>
     <p><em>ENEMY TUNNELLERS</em> dig toward your generators to plant mines. Their tunnels are hidden — a listening post reveals them. Dig into one to stop it.</p>
     <p><em>DAILY CHALLENGE</em>: everyone gets the same map and attack order each day. Compare scores with friends.</p>
     <p>Drag items up out of the tray to place them. <em>Pinch</em> to zoom.</p>
@@ -750,7 +750,8 @@ function explode(x, y, r, opt={}) {
   queueRockCheck(x,y,R+3);
   for (const [gn,e] of genHit) { hurtGen(gn, e*1.7); haptic('heavy'); }
   for (const s of soldiers) if (Math.hypot(s.x-x, s.y-2-y) < r*1.25) s.hp = 0;
-  for (const d of diggers) if (Math.hypot(d.x-x, d.y-y) < r*1.1) d.hp = 0;
+  for (const d of diggers) if (Math.hypot(d.x-x, d.y-y) < r*1.1) { if (d.down) { if (!d.carried && !d.healing) d.dead = true; } else d.hp = 0; }
+  for (const m of medics) if (Math.hypot(m.x-x, m.y-y) < r*1.1) m.dead = true;
   flashes.push({x,y,r:r*3.2,life:14,max:14});
   for (let k=0;k<r*1.5;k++) particles.push({x:x+(rand()-.5)*r,y:y+(rand()-.5)*r*.6,vx:(rand()-.5)*.15,vy:-.05-rand()*.12,life:120+rand()*120,max:240,k:'smoke'});
   for (let k=0;k<r*2;k++){ const a=rand()*6.28, sp=.3+rand()*.8; particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-.3,life:20+rand()*20,max:40,k:'spark'}); }
@@ -976,6 +977,55 @@ function findJob(d) {
   }
   return null;
 }
+// ---------- medics: one per field hospital, they fetch downed miners and carry them back
+let medics = [];
+function bfsPath(sx, sy, goal) {   // shortest walk through open space to cell `goal`
+  bfsGen++; const start=sy*W+sx, q=[start]; bfsSeen[start]=bfsGen; bfsPrev[start]=-1;
+  if (start===goal) return [];
+  for (let qi=0; qi<q.length && qi<40000; qi++) {
+    const c=q[qi], cx=c%W;
+    for (const n of [c-1,c+1,c-W,c+W]) {
+      if (n<0||n>=W*H) continue; if ((n===c-1&&cx===0)||(n===c+1&&cx===W-1)) continue;
+      if (bfsSeen[n]===bfsGen || !walkable(n)) continue;
+      bfsSeen[n]=bfsGen; bfsPrev[n]=c;
+      if (n===goal) { const path=[]; for (let p=n; p!==start; p=bfsPrev[p]) path.push(p); return path.reverse(); }
+      q.push(n);
+    }
+  }
+  return null;
+}
+function updateMedics() {
+  for (const r of rooms) if (r.kind==='hospital' && !medics.some(m=>m.hosp===r)) { r.medicCD=(r.medicCD||0)+1; if (r.medicCD>60*8) { r.medicCD=0; medics.push({ hosp:r, x:r.x+3, y:r.y+r.h-1, fx:r.x+3, fy:r.y+r.h-1, path:[], body:null, carrying:false, work:0, dir:1, anim:0, wait:0 }); } }
+  for (let k=medics.length-1;k>=0;k--) {
+    const m=medics[k], b=m.body;
+    if (m.dead || !rooms.includes(m.hosp)) {           // lost: drop whoever they were carrying where they stand
+      if (b) { b.carried=false; b.assigned=null; b.x=m.x; b.y=m.y; }
+      medics.splice(k,1); if (m.dead) m.hosp.medicCD=0; continue;
+    }
+    m.anim+=.2; m.fx += (m.x-m.fx)*.35; m.fy += (m.y-m.fy)*.35;
+    if (b && (b.dead || !diggers.includes(b))) { m.body=null; m.carrying=false; m.path=[]; }
+    if (!m.body) {
+      if (m.wait>0) { m.wait--; continue; }
+      let best=null, bd=1e9; for (const d of diggers) if (d.down && !d.carried && !d.healing && !d.assigned) { const dd=Math.abs(d.x-m.x)+Math.abs(d.y-m.y); if (dd<bd) { bd=dd; best=d; } }
+      if (!best) { m.wait=20; if (m.y!==m.hosp.y+m.hosp.h-1 || Math.abs(m.x-(m.hosp.x+3))>1) { const p=bfsPath(m.x,m.y,(m.hosp.y+m.hosp.h-1)*W+m.hosp.x+3); if (p) m.path=p; } }
+      else { const p=bfsPath(m.x,m.y,best.y*W+best.x); if (p) { m.body=best; best.assigned=m; m.path=p; } else m.wait=40; }
+    }
+    if (m.path.length) {
+      if (++m.work >= (m.carrying?6:4)) { m.work=0; const n=m.path.shift(); if (!walkable(n)) { m.path=[]; if (m.body && !m.carrying) { m.body.assigned=null; m.body=null; } continue; }
+        m.dir=(n%W)>m.x?1:(n%W)<m.x?-1:m.dir; m.x=n%W; m.y=(n/W)|0; }
+      if (m.carrying && m.body) { m.body.x=m.x; m.body.y=m.y; m.body.fx=m.fx; m.body.fy=m.fy; }
+      continue;
+    }
+    if (m.body && !m.carrying) {                          // reached them: pick up and head home
+      m.carrying=true; m.body.carried=true; sfx.thunk();
+      const p=bfsPath(m.x,m.y,(m.hosp.y+m.hosp.h-1)*W+m.hosp.x+3); m.path = p || [];
+      if (!p) { m.carrying=false; m.body.carried=false; m.body.assigned=null; m.body=null; m.wait=60; }
+    } else if (m.body && m.carrying) {                    // back at the hospital: hand over for treatment
+      m.body.carried=false; m.body.healing=8*60; m.body.healAt=m.hosp; m.body=null; m.carrying=false; game.rescued=(game.rescued||0)+1;
+      if (state==='play') toast('Medic brought a miner in — treating now');
+    }
+  }
+}
 function spawnDigger(hut) { diggers.push({ hut, x:hut.x+2, y:hut.y+hut.h-1, fx:hut.x+2, fy:hut.y+hut.h-1, path:[], target:-1, work:0, wait:(rand()*30)|0, hp:1, dir:1, anim:0, digging:false }); }
 function updateDiggers() {
   // huts keep their crews topped up
@@ -987,6 +1037,11 @@ function updateDiggers() {
   let idle = 0;
   for (let k=diggers.length-1;k>=0;k--) {
     const d=diggers[k], i=d.y*W+d.x;
+    if (d.down) {                                        // wounded: wait for a medic, heal in hospital, or bleed out
+      if (d.dead || (!d.carried && !d.healing && --d.downT<=0)) { if (d.assigned) d.assigned.body=null; diggers.splice(k,1); if (state==='play') toast(d.dead ? 'A wounded miner was killed' : 'A wounded miner didn\'t make it'); continue; }
+      if (d.healing && --d.healing<=0) { const h=d.healAt; d.down=false; d.healing=0; d.hp=1; d.assigned=null; if (h) { d.x=h.x+3; d.y=h.y+h.h-1; d.fx=d.x; d.fy=d.y; } if (state==='play') toast('Miner patched up and back to work'); }
+      continue;
+    }
     d.anim += .2;
     if (!walkable(i)) {                                 // buried by a fall: scramble out to the nearest open cell, upward first
       let out=-1; for (let rr=1; rr<=4 && out<0; rr++) for (const [dx,dy] of [[0,-rr],[-rr,0],[rr,0],[-rr,-rr],[rr,-rr],[0,rr]]) { const nx=d.x+dx, ny=d.y+dy; if (inB(nx,ny) && walkable(ny*W+nx)) { out=ny*W+nx; break; } }
@@ -994,7 +1049,13 @@ function updateDiggers() {
     }
     if (g[i]===WATER) d.hp -= .004;                     // drowning
     if (g[i]===FIRE) d.hp -= .03;
-    if (d.hp<=0) { if (d.target>=0) claimed.delete(d.target); diggers.splice(k,1); for (let n=0;n<6;n++) particles.push({x:d.x+.5,y:d.y,vx:(rand()-.5)*.4,vy:-rand()*.4,life:40,max:40,k:'gib'}); if (state==='play') toast('A miner was lost'); continue; }
+    if (d.hp<=0) {                                       // knocked down, not dead: they lie there until a medic comes
+      if (d.target>=0) claimed.delete(d.target); d.target=-1; d.path=[]; d.digging=false;
+      d.down=true; d.downT=45*60; d.hp=1; d.assigned=null; d.carried=false; d.healing=0;
+      for (let n=0;n<4;n++) particles.push({x:d.x+.5,y:d.y,vx:(rand()-.5)*.4,vy:-rand()*.4,life:30,max:30,k:'gib'});
+      if (state==='play') toast(rooms.some(r=>r.kind==='hospital') ? 'Miner down! A medic is on the way' : 'Miner down! Build a FIELD HOSPITAL to save them');
+      continue;
+    }
     d.fx += (d.x - d.fx)*.35; d.fy += (d.y - d.fy)*.35;
     // job still valid?
     if (d.target>=0 && !(mark[d.target] && DIGT[g[d.target]])) { claimed.delete(d.target); d.target=-1; d.path=[]; d.digging=false; }
@@ -1018,7 +1079,7 @@ function updateDiggers() {
     }
   }
   // gentle nudge if work is marked but nobody can reach it
-  if (state==='play' && diggers.length && idle===diggers.length && tick%60===0) {
+  if (state==='play' && diggers.length && idle===diggers.filter(d=>!d.down).length && idle>0 && tick%60===0) {
     let any=false; for (let i=0;i<mark.length;i+=3) if (mark[i]) { any=true; break; }
     if (any && game.t-(updateDiggers.hinted||-99)>25) { updateDiggers.hinted=game.t; toast('Your miners can\'t reach that — mark earth that touches open space'); }
   }
@@ -1272,7 +1333,21 @@ function drawEntities(s) {
   // ghost for a room waiting to be placed
   if (roomPending && roomGhost) { const st=stampFor(roomPending, roomGhost.x, roomGhost.y); for (const c of st.cells) { ctx.fillStyle = st.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); } }
   // miners: slim figures in tin hats, about five cells tall
+  for (const d of diggers) if (d.down && !d.carried && !d.healing) {
+    const x=d.fx-.6, y=d.fy+1;
+    px(x,y-.8,2.6,.8,'#7a6a42'); px(x+2.4,y-1,.9,.9,'#c8a07a'); px(x+2.4,y-1.2,1,.4,'#5c5a36');   // lying flat
+    if (rooms.some(r=>r.kind==='hospital') && (tick>>4)&1) { px(x+1.1,y-2.6,.4,1.2,'#e04040'); px(x+.7,y-2.2,1.2,.4,'#e04040'); }
+  }
+  for (const m of medics) {
+    if (g[m.y*W+m.x]===ROOM && !m.path.length && !m.body) continue;   // resting inside the hospital
+    const x=m.fx, y=m.fy+1, st=m.path.length?((m.anim|0)&1):0;
+    px(x+.2,y-4.5,.9,.8,'#c8a07a'); px(x-.1,y-5,1.5,.5,'#e8e2d0');
+    px(x+.1,y-3.7,1.1,1.9,'#e8e2d0'); px(x+.45,y-3.3,.4,1,'#c03030'); px(x+.25,y-3,.8,.4,'#c03030');
+    px(x+.15+st*.25,y-1.8,.45,1.8,'#4a4a48'); px(x+.7-st*.25,y-1.8,.45,1.8,'#3a3a38');
+    if (m.carrying) { px(x-.8,y-6.1,3,.8,'#7a6a42'); px(x+2,y-6.3,.8,.8,'#c8a07a'); }   // casualty over the shoulders
+  }
   for (const d of diggers) {
+    if (d.down) continue;
     const inHut = g[d.y*W+d.x]===ROOM; if (inHut && !d.digging && !d.path.length) continue;   // resting inside
     const climbing = !d.digging && d.path.length && Math.abs(d.fy - d.y) > .05 && Math.abs(d.fx - d.x) < .2;
     const x=d.fx, y=d.fy+1, f=d.dir>0, sw=d.digging ? ((tick>>2)&1) : 0, st=(!d.digging && d.path.length) ? ((d.anim|0)&1) : 0;
@@ -1490,6 +1565,7 @@ function canDigNear(w) {
   return false;
 }
 const trayTop = () => innerHeight - $('tray').offsetHeight;
+const roomGhostFrom = e => toWorld(e.clientX, e.clientY - (e.pointerType==='touch' ? 80 : 0));   // rooms are big: float the preview well above the finger
 function ghostFrom(e){ const off = e.pointerType==='touch' ? 44 : 0; return toWorld(e.clientX, e.clientY - off); }
 cv.addEventListener('pointerdown', e => {
   if (state!=='play') return;
@@ -1498,7 +1574,7 @@ cv.addEventListener('pointerdown', e => {
   cam.vy = 0; cam.vx = 0;
   if (pointers.size>=2) { gesture='pan2'; digAt=null; drawAt=null; paintLast=null; pinch=pinchState(); return; }
   const w = toWorld(e.clientX,e.clientY);
-  if (roomPending) { gesture='room'; roomGhost=w; drillTap={ sx:e.clientX, sy:e.clientY }; return; }
+  if (roomPending) { gesture='room'; roomGhost=roomGhostFrom(e); drillTap={ sx:e.clientX, sy:e.clientY }; return; }
   const dr = drillAt(w); if (dr) { gesture='drill'; drillTap={ d:dr, sx:e.clientX, sy:e.clientY }; return; }
   const gt = genAt(Math.floor(w.x), Math.floor(w.y)); if (gt) { gesture='gen'; drillTap={ gn:gt, sx:e.clientX, sy:e.clientY }; return; }
   gesture='pending'; pendingAt=performance.now();   // becomes a dig unless a second finger lands quickly
@@ -1520,7 +1596,7 @@ addEventListener('pointermove', e => {
     pinch = n;
   }
   else if (gesture==='dig') digAt = toWorld(e.clientX,e.clientY);
-  else if (gesture==='room') roomGhost = toWorld(e.clientX,e.clientY);
+  else if (gesture==='room') roomGhost = roomGhostFrom(e);
 });
 function endPointer(e) {
   if (dragItem) {
@@ -1548,7 +1624,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 
 // ---------- game flow
 function show(id, on){ $(id).hidden = !on; }
-function resetEntities(){ gens=[]; drills=[]; rooms=[]; roomPending=null; diggers=[]; claimed.clear(); pumps=[]; mgs=[]; bodies.length=0; rockChecks.length=0; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
+function resetEntities(){ gens=[]; drills=[]; rooms=[]; roomPending=null; diggers=[]; medics=[]; claimed.clear(); pumps=[]; mgs=[]; bodies.length=0; rockChecks.length=0; soldiers=[]; shells=[]; particles=[]; flashes=[]; tracers=[]; popups=[]; flares=[]; timers=[]; rainUntil=0; shake=0; }
 function startDemo() {
   demo = true; state='menu'; resetEntities();
   genWorld((Math.random()*1e9)|0); buildBase(true);
@@ -1840,7 +1916,7 @@ function update() {
   if (tick%6===0) processRockChecks();
   updateBodies();
   updateShells(); updateSoldiers(); updateMachines(); updateParticles();
-  updateGens(); updateDrills(); updateRooms();
+  updateGens(); updateDrills(); updateRooms(); updateMedics();
   updateDiggers();
   if (state==='play') { game.t += 1/60; applyDig(); updateDirector(); }
   else if (state==='menu') { game.t += 1/60; updateDemo(); if (tick-demoStart > 60*75) startDemo(); }
