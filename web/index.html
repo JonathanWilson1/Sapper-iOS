@@ -73,6 +73,9 @@
   #sharePreview{width:min(60vw,240px);border:2px solid var(--edge);image-rendering:auto}
   #over{overflow:auto;justify-content:flex-start;padding-top:calc(env(safe-area-inset-top) + 24px)}
   .bigscore{font-size:34px;color:#f0d68a;font-weight:900;letter-spacing:2px;margin:4px 0 8px}
+  .dbg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .dbg button{min-width:0;padding:9px 6px;font-size:12px;letter-spacing:1px}
+  .dbg h3{grid-column:1/-1;margin:8px 0 0;font-size:12px;letter-spacing:2px;color:var(--brass)}
   .scanlines{position:fixed;inset:0;pointer-events:none;z-index:3;
     background:repeating-linear-gradient(#0000 0 2px,#0000000d 2px 3px),radial-gradient(ellipse at center,#0000 55%,#0008 100%)}
 </style>
@@ -141,9 +144,15 @@
   <button id="upgClose" class="primary">Back to the Line</button>
 </div>
 
+<div id="debugScr" class="screen" hidden>
+  <div class="card"><h2>DEBUG</h2><div id="debugList" class="dbg"></div></div>
+  <button id="debugClose" class="primary">Back</button>
+</div>
+
 <div id="pause" class="screen" hidden>
   <h1>PAUSED</h1>
   <button id="resumeBtn" class="primary">Resume</button>
+  <button id="debugBtn">Debug</button>
   <button id="restartBtn">Restart</button>
   <button id="quitBtn">Main Menu</button>
 </div>
@@ -320,12 +329,13 @@ function overcharge(gn) {
   if (gn.cool) { toast(`Still cooling — ${Math.ceil(gn.cool/60)}s`); sfx.deny(); return; }
   gn.oc = OC_TIME; sfx.thunk(); haptic('medium'); toast('OVERCHARGED: double output for 20s — watch for fires');
 }
-function hurtGen(gn, dmg){ if (!gn) return; gn.hp -= dmg; gn.hit = 10; }
+function hurtGen(gn, dmg){ if (!gn || debugGod) return; gn.hp -= dmg; gn.hit = 10; }
 function nearestGen(x,y){ let best=null, bd=1e9; for (const gn of gens){ const d=Math.abs(gn.x+gn.w/2-x)+Math.abs(gn.y+gn.h/2-y)*.5; if (d<bd){bd=d;best=gn;} } return best; }
 function updateGens() {
   for (let k=gens.length-1;k>=0;k--) {
     const gn=gens[k];
     if (state==='menu') { gn.hp=gn.max; continue; }
+    if (debugGod && gn.hp < gn.max) gn.hp = gn.max;
     if (gn.hp<=0) { destroyGen(gn); continue; }
     if (state!=='play') continue;
     if (gn.oc>0) {
@@ -1753,9 +1763,36 @@ async function shareScore() {
   try { await navigator.clipboard.writeText(shareText); toast('Image saved, score text copied'); } catch(e) {}
 }
 
+// ---------- debug menu (pause → Debug): fire any event, cheat, inspect
+let debugGod = false;
+const DEBUG = [
+  ['Events'],
+  ...EVENTS.map(e => [e.id.toUpperCase(), () => e.run()]),
+  ['GIANT METEOR', () => { banner('GIANT METEOR','IT\'S GOING TO LEAVE A HOLE'); schedule(2.5, ()=>spawnShell('giant', pickX())); }],
+  ['BUNKER BUSTER', () => { banner('BUNKER BUSTER','DEBUG'); const sh=spawnShell('buster', pickX()); sh.pen=80; }],
+  ['1 TUNNELLER', () => spawnTunneller(rand()<.5?-1:1)],
+  ['5 RAIDERS', () => { for (let k=0;k<5;k++) spawnSoldier(k%2?1:-1); }],
+  ['Cheats'],
+  ['+500 GOLD', () => { gold += 500; }],
+  ['HEAL ALL', () => { for (const gn of gens) gn.hp = gn.max; }],
+  [() => 'GOD MODE: ' + (debugGod?'ON':'OFF'), () => { debugGod = !debugGod; }],
+  ['SKIP +60s', () => { game.t += 60; game.nextEvent = Math.min(game.nextEvent, game.t+1); }],
+  ['NEXT EVENT NOW', () => { game.nextEvent = game.t; }],
+  ['KILL ENEMIES', () => { for (const s2 of soldiers) s2.hp = 0; }],
+  ['REVEAL TUNNELS', () => { secret.fill(0); for (const s2 of soldiers) if (s2.tun) s2.revealed = true; }],
+  ['FLOOD HERE', () => { const cx=Math.floor(cam.x+viewRows()*cv.width/cv.height/2), cy=Math.floor(cam.y+10); for (let y=cy;y<cy+8;y++) for (let x=cx-10;x<cx+10;x++) if (inB(x,y) && g[y*W+x]===E) g[y*W+x]=WATER; }],
+  ['CLEAR MARKS', () => { mark.fill(0); }],
+  ['MAX UPGRADES', () => { for (const u of UPGRADES) up[u.id] = u.costs.length; }],
+  ['LOSE NOW', () => { for (const gn of [...gens]) gn.hp = -1; debugGod = false; }],
+];
+function openDebug() {
+  show('pause',false); show('debugScr',true);
+  $('debugList').innerHTML = DEBUG.map((d,k) => d.length===1 ? `<h3>${d[0].toUpperCase()}</h3>` : `<button data-dbg="${k}">${typeof d[0]==='function' ? d[0]() : d[0]}</button>`).join('');
+}
+
 function pause(){ if (state!=='play') return; state='paused'; show('pause',true); }
 function resume(){ state='play'; show('pause',false); last=performance.now(); }
-function toMenu(){ if (checkForUpdate.pending) { location.reload(); return; } ['over','pause','help','hud','tray','mini','tut','upg','roomsScr'].forEach(s=>show(s,false)); show('menu',true); updateBest(); startDemo(); resize(); }
+function toMenu(){ debugGod = false; if (checkForUpdate.pending) { location.reload(); return; } ['over','pause','help','hud','tray','mini','tut','upg','roomsScr','debugScr'].forEach(s=>show(s,false)); show('menu',true); updateBest(); startDemo(); resize(); }
 function updateBest(){ const b=game.best, bs=+(localStorage.getItem('sapper.bestScore')||0); $('bestStat').textContent = b ? `BEST SCORE ${bs.toLocaleString()} · HELD ${fmtT(b)}` : '';
   const ds=+(localStorage.getItem('sapper.daily.'+todayKey())||0); $('dailyStat').textContent = `TODAY (${todayLabel()}): ` + (ds ? `BEST ${ds.toLocaleString()}` : 'NOT PLAYED YET'); }
 $('startBtn').onclick = () => startGame();
@@ -1763,6 +1800,9 @@ $('campBtn').onclick = () => startGame({ tutorial:true });
 $('tutSkip').onclick = () => { endTutorial(false); toast('Tutorial skipped — good luck'); };
 $('shareBtn').onclick = shareScore;
 $('upgClose').onclick = () => { show('upg',false); state='play'; last=performance.now(); tut.sawUpg = true; };
+$('debugBtn').onclick = openDebug;
+$('debugClose').onclick = () => { show('debugScr',false); show('pause',true); };
+$('debugList').addEventListener('click', e => { const b=e.target.closest('button[data-dbg]'); if (!b) return; DEBUG[+b.dataset.dbg][1](); show('debugScr',false); resume(); toast('Debug: '+b.textContent); });
 $('roomList').addEventListener('click', e => { const b=e.target.closest('button[data-room]'); if (b) chooseRoom(b.dataset.room); });
 $('roomClose').onclick = () => { show('roomsScr',false); state='play'; last=performance.now(); };
 $('dailyBtn').onclick = () => startGame({ daily:true });
