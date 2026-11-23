@@ -1,0 +1,7 @@
+{
+  "name": "sapper-tests",
+  "private": true,
+  "description": "Headless regression scripts for web/index.html (Chrome + WebKit via playwright-core). Screenshots/GIFs go to /tmp/sapper-out/.",
+  "scripts": { "smoke": "mkdir -p /tmp/sapper-out && node idle-survival.js && node miners-marking.js && node medic-rescue.js && node generator-rows.js && node bulkheads.js && node debug-menu.js" },
+  "devDependencies": { "playwright-core": "^1" }
+}
