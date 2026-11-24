@@ -86,7 +86,8 @@
   #warTabs button.on{border-color:var(--brass);color:#f0d68a}
   #warTabs button.dead{opacity:.45;text-decoration:line-through}
   #atkTray{position:fixed;left:0;right:0;bottom:0;padding:6px 6px calc(env(safe-area-inset-bottom) + 6px);background:linear-gradient(#2a120ef0,#120806);border-top:2px solid #6a2a1c;display:flex;gap:4px;z-index:5}
-  #atkTray .item{background:#2a1410;border-color:#5a2a1c}
+  #atkTray .item{background:#2a1410;border-color:#5a2a1c;cursor:pointer}
+  #atkTray .item.press{background:#7a2a1c;transform:translateY(2px)}
   .scanlines{position:fixed;inset:0;pointer-events:none;z-index:3;
     background:repeating-linear-gradient(#0000 0 2px,#0000000d 2px 3px),radial-gradient(ellipse at center,#0000 55%,#0008 100%)}
 </style>
@@ -1348,6 +1349,7 @@ function tremor() {
 }
 function updateDirector() {
   if (tut.on) { updateTutorial(); return; }
+  if (game.war) { for (let k=timers.length-1;k>=0;k--) if (game.t>=timers[k].at) { const f=timers[k].fn; timers.splice(k,1); f(); } return; }
   game.intensity = 1 + game.t/110;
   for (let k=timers.length-1;k>=0;k--) if (game.t>=timers[k].at) { const f=timers[k].fn; timers.splice(k,1); f(); }
   if (game.t >= game.harassAt) { spawnShell(game.t>200 && rand()<.3 ? 'howitzer':'light', pickX()); game.harassAt = game.t + Math.max(1.3, 6.5 - game.t/45)*(.6+drand()*.8)*(game.war?1.6:1); }
@@ -2380,7 +2382,7 @@ $('warJoin').onclick = () => { localStorage.setItem('sapper.name', myName()); ne
 $('warStart').onclick = netStartWar;
 $('warBack').onclick = () => { netReset(); show('warScr',false); show('menu',true); };
 $('warTabs').addEventListener('click', e => { const b=e.target.closest('button[data-page]'); if (b && !(state==='spectate' && b.dataset.page==='me')) setView(b.dataset.page); });
-$('atkTray').addEventListener('click', e => { const it=e.target.closest('.item[data-atk]'); if (it) sendAttack(it.dataset.atk); });
+$('atkTray').addEventListener('pointerdown', e => { const it=e.target.closest('.item[data-atk]'); if (!it) return; e.preventDefault(); sfx.init(); it.classList.add('press'); setTimeout(()=>it.classList.remove('press'), 180); sendAttack(it.dataset.atk); });
 $('spectBtn').onclick = () => { show('over',false); state='spectate'; const first = net.order.find(id=>id!==net.myId); if (first) setView(first); };
 $('debugBtn').onclick = openDebug;
 $('debugClose').onclick = () => { show('debugScr',false); show('pause',true); };

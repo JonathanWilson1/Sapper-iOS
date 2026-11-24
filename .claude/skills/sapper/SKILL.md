@@ -86,7 +86,7 @@ Set `localStorage.sapper.tut='1'` first so the tutorial doesn't block attacks. S
   - Multiplayer for 2–4 phones. PeerJS/WebRTC (`web/peerjs.min.js`, public 0.peerjs.com broker); the host's peer id is `sapper-war-<CODE>` and the host relays.
   - Each phone runs its own bunker on the same seed. Phones exchange `status` (1 s), a `snap` (run-length-encoded cells plus entities, every 0.5 s), `attack`, and `dead`.
   - Tabs, or swiping on a rival page (an edge swipe on your own page), move between bunkers. A rival page zooms onto their generators with an attack tray: BARRAGE 60, RAID 80, TUNNEL 90, HEAVY 130, METEOR 220.
-  - The AI guns are 1.6× slower in a war. Last generator standing wins; a fallen player can "Watch the others".
+  - There are **no AI attacks** in a war; the only attacks are ones players send. The attack tray reacts on `pointerdown`, because iOS doesn't fire delegated clicks on plain divs. Last generator standing wins; a fallen player can "Watch the others".
   - Test with `tests/trench-war.js` (serve `web/` on :8799 first; headless pauses background tabs, so the test ticks them by hand). Code is in the `// ---------- TRENCH WAR` section.
 - **Modes**: Boot Camp tutorial (runs automatically the first time, skippable), Daily Challenge (seeded map + attack order, per-day best), Debug menu (Pause → Debug: fire any event, +gold, god mode, etc.).
 - **Score and share**:
