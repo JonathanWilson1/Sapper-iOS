@@ -2,7 +2,7 @@
 // Network first (so updates arrive when online), cached copy when offline.
 // Only the game's own files are ever written to the cache.
 const CACHE = 'sapper-v4';
-const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-512.png'];
+const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-512.png', './peerjs.min.js'];
 const base = new URL('./', self.location);
 const paths = new Set(FILES.map(f => new URL(f, base).pathname));
 const docPaths = new Set([new URL('./', base).pathname, new URL('./index.html', base).pathname]);
