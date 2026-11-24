@@ -30,6 +30,7 @@ Offline/update machinery:
 - `checkForUpdate()` runs on visibility change and reloads on the menu or game-over screen when a newer BUILD exists.
 
 ## Test (always before publishing)
+Run the tests as a **separate step and read the output before publishing**. Don't chain `deploy.sh` after a test command: twice, a broken build went live that way (attacks commented out by a trailing `//`; a null-prototype object that PeerJS couldn't send). For any Trench War change, run `tests/trench-war.js`.
 `tests/` holds headless scripts (playwright-core driving the system Chrome at `/Applications/Google Chrome.app`, plus Playwright WebKit). Run them with `cd tests && npm i && npm run smoke`, or `node <file>.js` one at a time. Screenshots and GIFs go to `/tmp/sapper-out/`. Read the PNGs to check visuals.
 
 The page exposes `window.__sapper` (`fast(n)` steps the sim n ticks, plus getters). Top-level `let`/`const` are reachable from `page.evaluate`: `g`, `gens`, `rooms`, `diggers`, `mark`, `place()`, `spawnShell()` and so on.
