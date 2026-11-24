@@ -2148,7 +2148,8 @@ function onNet(m, conn) {
     case 'status': Object.assign(p, { gens:Number(m.gens)|0, gold:Number(m.gold)|0, hp:Number(m.hp)|0, t:Number(m.time)|0 }); refreshTabs(); break;
     case 'snap': if (!(Number(m.rows)>0 && Number(m.rows)<=H) || !m.ent) break; p.snap = { y0:m.y0, rows:m.rows, data: rleDecode(new Uint8Array(m.rle), W*m.rows), ent:m.ent, at:performance.now() }; break;
     case 'attack': if (!ATTACKS.some(a=>a.id===m.kind)) break;
-      if (performance.now() - (p.lastAtk||0) < 2000) break; p.lastAtk = performance.now();   // same reload limit as the sender's guns if (m.to===net.myId && state==='play') incomingAttack(m.kind, p.name); else if (m.to!==net.myId) { const tp=net.players[m.to]; if (tp && state==='play') toast(`${p.name} sent ${ATTACKS.find(a=>a.id===m.kind).name} at ${m.to===net.myId?'you':tp.name}`); } break;
+      if (performance.now() - (p.lastAtk||0) < 2000) break; p.lastAtk = performance.now();   /* same reload limit as the sender's guns */
+      if (m.to===net.myId && state==='play') incomingAttack(m.kind, p.name); else if (m.to!==net.myId) { const tp=net.players[m.to]; if (tp && state==='play') toast(`${p.name} sent ${ATTACKS.find(a=>a.id===m.kind).name} at ${m.to===net.myId?'you':tp.name}`); } break;
     case 'dead': p.alive=false; p.gens=0; toast(`${p.name}'s line has fallen!`); refreshTabs(); checkWinner(); break;
   }
 }
