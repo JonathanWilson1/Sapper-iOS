@@ -286,7 +286,7 @@ function buildSky(s) {
 
 // ---------- world generation
 function genWorld(s) {
-  seed = s; g.fill(0); hp.fill(0); prop.fill(0); secret.fill(0); mark.fill(0); ladder.fill(0); bgc.fill(0); st.fill(0);
+  seed = s; g.fill(0); hp.fill(0); prop.fill(0); secret.fill(0); mark.fill(0); zone.fill(0); ladder.fill(0); bgc.fill(0); st.fill(0);
   const r = mulberry(s);
   buildSky(s);
   for (let x=0;x<W;x++) surfOrig[x] = SKY + Math.round((fbm(x*.04,3.3,s,2)-.5)*6);
@@ -1100,6 +1100,7 @@ function popup(x,y,txt){ popups.push({x,y,txt,life:60}); }
 let digAt = null, digSoundT = 0;
 // ---------- dig orders: your finger marks earth, miners from the Miners' Hut walk over and dig it
 const mark = new Uint8Array(W*H);
+const zone = new Uint8Array(W*H);   // areas you've asked to be dug out: anything loose that falls back in gets dug again
 let markErase = false;
 function applyDig() {   // paints (or erases) dig marks under the finger
   if (!digAt) return;
@@ -1107,8 +1108,8 @@ function applyDig() {   // paints (or erases) dig marks under the finger
   for (let y=cy-2; y<=cy+2; y++) for (let x=cx-2; x<=cx+2; x++) {
     if (!inB(x,y)) continue;
     const i=y*W+x;
-    if (markErase) { if (mark[i]) { mark[i]=0; n++; } }
-    else if (DIGT[g[i]] && !mark[i]) { mark[i]=1; n++; }
+    if (markErase) { if (mark[i]||zone[i]) { mark[i]=0; zone[i]=0; n++; } }
+    else { if (!zone[i]) n++; zone[i]=1; if (DIGT[g[i]]) mark[i]=1; }
   }
   if (n && tick-digSoundT>8) { digSoundT=tick; sfx.tick(); }
 }
@@ -1208,6 +1209,8 @@ function updateMedics() {
 function spawnDigger(hut) { diggers.push({ hut, x:hut.x+2, y:hut.y+hut.h-1, fx:hut.x+2, fy:hut.y+hut.h-1, path:[], target:-1, work:0, wait:(rand()*30)|0, hp:1, dir:1, anim:0, digging:false }); }
 function updateSites() {
   if (tick%20) return;
+  // sand or rubble that slid into a dig area is dug out again instead of sealing it off
+  for (let i=0;i<W*H;i++) if (zone[i] && !mark[i]) { const t=g[i]; if (t===SAND||t===RUBBLE) mark[i]=1; }
   for (const st of sites) {
     let clear=true;
     for (const c of st.cells) { const i=idx(c[0],c[1]); if (SOLID[g[i]]) { clear=false; if (DIGT[g[i]]) mark[i]=1; } }
@@ -2363,7 +2366,7 @@ const DEBUG = [
   ['KILL ENEMIES', () => { for (const s2 of soldiers) s2.hp = 0; }],
   ['REVEAL TUNNELS', () => { secret.fill(0); for (const s2 of soldiers) if (s2.tun) s2.revealed = true; }],
   ['FLOOD HERE', () => { const cx=Math.floor(cam.x+viewRows()*cv.width/cv.height/2), cy=Math.floor(cam.y+10); for (let y=cy;y<cy+8;y++) for (let x=cx-10;x<cx+10;x++) if (inB(x,y) && g[y*W+x]===E) g[y*W+x]=WATER; }],
-  ['CLEAR MARKS', () => { mark.fill(0); }],
+  ['CLEAR MARKS', () => { mark.fill(0); zone.fill(0); }],
   ['MAX UPGRADES', () => { for (const u of UPGRADES) up[u.id] = u.costs.length; }],
   ['LOSE NOW', () => { for (const gn of [...gens]) gn.hp = -1; debugGod = false; }],
 ];
