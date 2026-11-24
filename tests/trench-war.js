@@ -22,7 +22,8 @@ const URL = process.env.SAPPER_URL || 'http://localhost:8799/index.html';
   // Dave swipes to Jon's page and sends a barrage
   await a.evaluate(() => { window.__sapper.gold = 500; });
   await a.mouse.move(300, 400); await a.mouse.down(); await a.mouse.move(10, 400, { steps: 6 }); await a.mouse.up();   // edge swipe from the right? use tabs instead if needed
-  await a.evaluate(() => { const hostId = Object.keys(window.__sapper.net.players).find(id => window.__sapper.net.players[id].name==='JON'); document.querySelector(`#warTabs button[data-page="${hostId}"]`).click(); });
+  const hostId = await a.evaluate(() => Object.keys(window.__sapper.net.players).find(id => window.__sapper.net.players[id].name==='JON'));
+  await a.click(`#warTabs button[data-page="${hostId}"]`);
   await a.waitForTimeout(800);
   await a.screenshot({ path: '/tmp/sapper-out/war-rival.png' });
   await a.click('#atkTray .item[data-atk="barrage"]');

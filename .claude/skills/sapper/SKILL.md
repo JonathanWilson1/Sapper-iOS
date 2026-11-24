@@ -41,7 +41,7 @@ Set `localStorage.sapper.tut='1'` first so the tutorial doesn't block attacks. S
 - **World**: 192×440 cell grid (`W`,`H`); the screen shows about 112 cells across at zoom 1. Cell materials: `E SOIL SAND ROCK WATER TIMBER BAGS CONC GOLD RUBBLE FIRE HQ(generator) PUMP MG BED GRASS LAMP DRILL ROOM DOOR`, with per-material tables `SOLID/RES/HARD/DIGT/SUPPORTS`. Background layers: `prop` (timber bracing), `ladder`, `secret` (hidden enemy tunnels), `mark` (dig orders), `bgc` (wall type).
 - **Physics**: sand pours and rubble piles. Water flows and soaks into soil. Ceilings over wide spans cave in, faster the wider they are, unless something supports them within 6 cells (timber, concrete, bags, generators, rooms, pumps, props). A rock blob with less than 20% of its underside supported falls as one piece (`processRockChecks`, `updateBodies`).
 - **Controls**:
-  - **One finger** marks earth to dig (yellow hatching); drag over marked earth to unmark it.
+  - **One finger** marks earth to dig with a square 5×5 brush snapped to the grid (yellow hatching); drag over marked earth to unmark it.
   - **Two fingers** scroll and pinch-zoom.
   - A loupe magnifier shows above the finger.
   - Tap the drill or a generator for its action.
@@ -85,7 +85,7 @@ Set `localStorage.sapper.tut='1'` first so the tutorial doesn't block attacks. S
 - **Trench War** (menu button):
   - Multiplayer for 2–4 phones. PeerJS/WebRTC (`web/peerjs.min.js`, public 0.peerjs.com broker); the host's peer id is `sapper-war-<CODE>` and the host relays.
   - Each phone runs its own bunker on the same seed. Phones exchange `status` (1 s), a `snap` (run-length-encoded cells plus entities, every 0.5 s), `attack`, and `dead`.
-  - Tabs, or swiping on a rival page (an edge swipe on your own page), move between bunkers. A rival page zooms onto their generators with an attack tray: BARRAGE 60, RAID 80, TUNNEL 90, HEAVY 130, METEOR 220.
+  - Tabs, or swiping on a rival page (an edge swipe on your own page), move between bunkers. A rival page zooms onto their generators with an attack tray: BARRAGE 60, RAID 80, TUNNEL 90, HEAVY 130, METEOR 220. The war-only upgrade **War Footing** (100/220/400) makes your attacks bigger (more shells, larger blasts, more raiders and tunnellers); the level travels with each attack. Tabs and the attack tray react on `pointerdown` and are updated in place, never rebuilt.
   - There are **no AI attacks** in a war; the only attacks are ones players send. The attack tray reacts on `pointerdown`, because iOS doesn't fire delegated clicks on plain divs. Last generator standing wins; a fallen player can "Watch the others".
   - Test with `tests/trench-war.js` (serve `web/` on :8799 first; headless pauses background tabs, so the test ticks them by hand). Code is in the `// ---------- TRENCH WAR` section.
 - **Modes**: Boot Camp tutorial (runs automatically the first time, skippable), Daily Challenge (seeded map + attack order, per-day best), Debug menu (Pause → Debug: fire any event, +gold, god mode, etc.).

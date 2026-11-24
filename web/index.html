@@ -468,7 +468,7 @@ function updateDrills() {
 }
 
 // ---------- upgrades
-const up = { shovel:0, drill:0, gen:0, armour:0, mg:0, pump:0 };
+const up = { atk:0, shovel:0, drill:0, gen:0, armour:0, mg:0, pump:0 };
 const UPGRADES = [
   { id:'shovel', name:'SHARPER SHOVELS', desc:'Your miners dig 40% faster', costs:[60,140,260] },
   { id:'drill',  name:'DRILL BITS',      desc:'+10 depth per tap, bores faster', costs:[80,180] },
@@ -476,6 +476,7 @@ const UPGRADES = [
   { id:'armour', name:'STEEL PLATING',   desc:'Generators +40 strength, fully repaired', costs:[120,260] },
   { id:'mg',     name:'BELT FEED',       desc:'MG nests fire twice as fast', costs:[100] },
   { id:'pump',   name:'BIG PUMPS',       desc:'Pumps drain twice as fast, further', costs:[80] },
+  { id:'atk',    name:'WAR FOOTING',     desc:'Trench War only: your attacks hit harder — more shells, bigger blasts, more raiders', costs:[100,220,400], war:true },
 ];
 function buyUpgrade(id) {
   const u = UPGRADES.find(u=>u.id===id), lv = up[id], cost = u.costs[lv];
@@ -487,7 +488,7 @@ function buyUpgrade(id) {
 }
 function renderUpgrades() {
   $('upgGold').textContent = '◆ '+gold;
-  $('upgList').innerHTML = UPGRADES.map(u => { const lv=up[u.id], cost=u.costs[lv];
+  $('upgList').innerHTML = UPGRADES.filter(u => !u.war || game.war).map(u => { const lv=up[u.id], cost=u.costs[lv];
     return `<div class="uprow"><div><b>${u.name}</b><small>${u.desc}</small><div class="pips">${'■'.repeat(lv)}${'□'.repeat(u.costs.length-lv)}</div></div>`+
       (cost===undefined ? '<button disabled>MAX</button>' : `<button data-up="${u.id}" ${gold<cost?'style="opacity:.5"':''}>◆${cost}</button>`)+'</div>'; }).join('');
 }
@@ -1102,9 +1103,9 @@ const mark = new Uint8Array(W*H);
 let markErase = false;
 function applyDig() {   // paints (or erases) dig marks under the finger
   if (!digAt) return;
-  const R=2.4, cx=digAt.x, cy=digAt.y; let n=0;
-  for (let y=Math.floor(cy-R); y<=cy+R; y++) for (let x=Math.floor(cx-R); x<=cx+R; x++) {
-    if (!inB(x,y) || (x+.5-cx)**2+(y+.5-cy)**2 > R*R) continue;
+  const cx=Math.floor(digAt.x), cy=Math.floor(digAt.y); let n=0;   // a square 5×5 brush, snapped to the grid, so marked areas have straight edges
+  for (let y=cy-2; y<=cy+2; y++) for (let x=cx-2; x<=cx+2; x++) {
+    if (!inB(x,y)) continue;
     const i=y*W+x;
     if (markErase) { if (mark[i]) { mark[i]=0; n++; } }
     else if (DIGT[g[i]] && !mark[i]) { mark[i]=1; n++; }
@@ -1637,7 +1638,7 @@ function drawEntities(s) {
   if (gh) for (const c of gh.cells) { ctx.fillStyle = !c.ok ? 'rgba(200,60,40,.35)' : gh.ok ? 'rgba(120,220,120,.55)' : 'rgba(220,80,60,.55)'; ctx.fillRect(c[0]*s,c[1]*s,s,s); }
   if (gh && dragItem && dragItem.id==='gen' && ghostPos) genLabel(gh.cells[0], s);
   if (tut.on && TUT[tut.i] && TUT[tut.i].mark) { const m=TUT[tut.i].mark(); if (m) { const pr=4+Math.sin(tick*.15)*1.5; ctx.strokeStyle='#f0d68a'; ctx.lineWidth=Math.max(2,dpr*1.5); ctx.beginPath(); ctx.arc(m.x*s,m.y*s,pr*s,0,6.29); ctx.stroke(); } }
-  if (digAt && state==='play') { ctx.strokeStyle='#e8d6a088'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.arc(digAt.x*s,digAt.y*s,2.4*s,0,6.29); ctx.stroke(); }
+  if (digAt && state==='play') { ctx.strokeStyle='#e8d6a088'; ctx.lineWidth=Math.max(1,dpr); ctx.beginPath(); ctx.strokeRect((Math.floor(digAt.x)-2)*s,(Math.floor(digAt.y)-2)*s,5*s,5*s); }
 }
 function drawLoupe() {
   if (!(gesture==='dig' || gesture==='draw') || state!=='play') return;
@@ -2188,7 +2189,7 @@ function onNet(m, conn) {
     }
     case 'attack': if (!ATTACKS.some(a=>a.id===m.kind)) break;
       if (performance.now() - (p.lastAtk||0) < 2000) break; p.lastAtk = performance.now();   /* same reload limit as the sender's guns */
-      if (m.to===net.myId && state==='play') incomingAttack(m.kind, p.name); else if (m.to!==net.myId && hasPlayer(m.to)) { const tp=net.players[m.to]; if (tp && state==='play') toast(`${p.name} sent ${ATTACKS.find(a=>a.id===m.kind).name} at ${m.to===net.myId?'you':tp.name}`); } break;
+      if (m.to===net.myId && state==='play') incomingAttack(m.kind, p.name, Math.max(0, Math.min(3, Number(m.lv)|0))); else if (m.to!==net.myId && hasPlayer(m.to)) { const tp=net.players[m.to]; if (tp && state==='play') toast(`${p.name} sent ${ATTACKS.find(a=>a.id===m.kind).name} at ${m.to===net.myId?'you':tp.name}`); } break;
     case 'dead': p.alive=false; p.gens=0; toast(`${p.name}'s line has fallen!`); refreshTabs(); checkWinner(); break;
   }
 }
@@ -2222,13 +2223,18 @@ function pageStep(dir) {
 function refreshTabs() {
   if (!net.on || !net.started) return;
   const pages = ['me', ...net.order.filter(id=>id!==net.myId)];
-  const tabs = $('warTabs'); tabs.textContent = '';
+  // update the tab buttons in place: rebuilding them a few times a second ate taps that landed mid-rebuild
+  const tabs = $('warTabs');
+  for (const b of [...tabs.children]) if (!pages.includes(b.dataset.page)) b.remove();
   for (const id of pages) {
     const p = id==='me' ? null : net.players[id]; if (id!=='me' && !p) continue;
     const name = id==='me' ? 'YOU' : cleanName(p.name), dead = id==='me' ? !net.alive : !p.alive;
     const info = id==='me' ? `${gens.length}⚙` : dead ? '☠' : `${p.gens??'?'}⚙ ◆${p.gold??'?'}`;
-    const b = document.createElement('button'); b.dataset.page = id; b.className = (net.view===id?'on ':'') + (dead?'dead':'');
-    b.append(name, document.createElement('br'), info); tabs.append(b);
+    let b = [...tabs.children].find(x => x.dataset.page===id);
+    if (!b) { b = document.createElement('button'); b.dataset.page = id; b.append(document.createElement('span'), document.createElement('br'), document.createElement('span')); tabs.append(b); }
+    const cls = (net.view===id?'on ':'') + (dead?'dead':''); if (b.className!==cls) b.className = cls;
+    if (b.children[0].textContent!==name) b.children[0].textContent = name;
+    if (b.children[2].textContent!==info) b.children[2].textContent = info;
   }
 }
 function buildAtkTray() {
@@ -2240,18 +2246,19 @@ function sendAttack(kind) {
   if (gold < a.cost) { toast('Not enough gold'); sfx.deny(); return; }
   if ((sendAttack.cool||0) > performance.now()) { toast('Guns reloading…'); return; }
   gold -= a.cost; sendAttack.cool = performance.now() + 2500;
-  netSend({ t:'attack', to: target, kind });
+  netSend({ t:'attack', to: target, kind, lv: up.atk });
   game.sent = (game.sent||0) + 1;
   sfx.boom(6,.5); haptic('heavy'); toast(`${a.name} away — watch ${tp.name}'s bunker`);
 }
-function incomingAttack(kind, from) {
+function incomingAttack(kind, from, lv=0) {
   const a = ATTACKS.find(x=>x.id===kind); if (!a) return;
-  banner(`${from} SENT ${a.label}`, 'INCOMING!'); haptic('heavy'); game.hitsTaken=(game.hitsTaken||0)+1;
-  if (kind==='barrage') for (let k=0;k<9;k++) schedule(2+rand()*5, ()=>spawnShell(rand()<.3?'howitzer':'light', pickX()));
-  if (kind==='heavy') for (let k=0;k<4;k++) schedule(2.5+k*1.4, ()=>spawnShell('heavy', pickX()));
-  if (kind==='raid') { game.raids++; for (let k=0;k<6;k++) schedule(1+k*1.2, ()=>spawnSoldier(rand()<.5?-1:1)); }
-  if (kind==='tunnel') for (let k=0;k<2;k++) schedule(1+k*4, ()=>spawnTunneller(rand()<.5?-1:1));
-  if (kind==='meteor') schedule(2.5, ()=>spawnShell('meteor', pickX()));
+  banner(`${from} SENT ${a.label}`, lv ? `INCOMING — WAR FOOTING LEVEL ${lv}!` : 'INCOMING!'); haptic('heavy'); game.hitsTaken=(game.hitsTaken||0)+1;
+  const big = sh2 => { sh2.r += lv*1.5; sh2.pen += lv*2; };   // War Footing: each level makes every shell hit harder
+  if (kind==='barrage') for (let k=0;k<9+lv*4;k++) schedule(2+rand()*5, ()=>big(spawnShell(rand()<.3?'howitzer':'light', pickX())));
+  if (kind==='heavy') for (let k=0;k<4+lv;k++) schedule(2.5+k*1.4, ()=>big(spawnShell('heavy', pickX())));
+  if (kind==='raid') { game.raids++; for (let k=0;k<6+lv*3;k++) schedule(1+k*1.2, ()=>spawnSoldier(rand()<.5?-1:1)); }
+  if (kind==='tunnel') for (let k=0;k<2+lv;k++) schedule(1+k*4, ()=>spawnTunneller(rand()<.5?-1:1));
+  if (kind==='meteor') schedule(2.5, ()=>{ const m2=spawnShell('meteor', pickX()); m2.r += lv*5; m2.pen += lv*3; });
 }
 function checkWinner() {
   if (!net.started) return;
@@ -2381,7 +2388,7 @@ $('warHost').onclick = () => { localStorage.setItem('sapper.name', myName()); ne
 $('warJoin').onclick = () => { localStorage.setItem('sapper.name', myName()); netJoin(); };
 $('warStart').onclick = netStartWar;
 $('warBack').onclick = () => { netReset(); show('warScr',false); show('menu',true); };
-$('warTabs').addEventListener('click', e => { const b=e.target.closest('button[data-page]'); if (b && !(state==='spectate' && b.dataset.page==='me')) setView(b.dataset.page); });
+$('warTabs').addEventListener('pointerdown', e => { const b=e.target.closest('button[data-page]'); if (!b) return; e.preventDefault(); if (!(state==='spectate' && b.dataset.page==='me')) setView(b.dataset.page); });
 $('atkTray').addEventListener('pointerdown', e => { const it=e.target.closest('.item[data-atk]'); if (!it) return; e.preventDefault(); sfx.init(); it.classList.add('press'); setTimeout(()=>it.classList.remove('press'), 180); sendAttack(it.dataset.atk); });
 $('spectBtn').onclick = () => { show('over',false); state='spectate'; const first = net.order.find(id=>id!==net.myId); if (first) setView(first); };
 $('debugBtn').onclick = openDebug;
