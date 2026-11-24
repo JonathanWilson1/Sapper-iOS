@@ -2102,6 +2102,8 @@ function cleanEnt(e) {
   for (const gn of out.gens) gn[5] = Math.max(1, gn[5]);
   return out;
 }
+// the network serializer needs a plain object, not the null-prototype map
+const rosterOut = () => Object.fromEntries(Object.entries(net.players).map(([id,p]) => [id, { name: cleanName(p.name), alive: p.alive!==false }]));
 const cleanName = n => String(n||'?').toUpperCase().replace(/[^A-Z0-9 ]/g,'').trim().slice(0,10) || '?';
 const myName = () => ($('warName').value || localStorage.getItem('sapper.name') || 'SAPPER').toUpperCase().slice(0,10);
 function netSend(msg, except) {
@@ -2156,7 +2158,7 @@ function onNet(m, conn) {
   if (!validId(m.from)) return;
   const p = hasPlayer(m.from) ? net.players[m.from] : (net.players[m.from] = { name:'?', alive:true });
   switch (m.t) {
-    case 'hello': p.name = cleanName(m.name); if (net.host) { netSend({ t:'lobby', players: net.players }); } warLobby(); break;
+    case 'hello': p.name = cleanName(m.name); if (net.host) { netSend({ t:'lobby', players: rosterOut() }); } warLobby(); break;
     case 'lobby': for (const id of Object.keys(m.players||{})) { if (!validId(id)) continue; const q=m.players[id]||{}; net.players[id] = Object.assign(net.players[id]||{}, { name: cleanName(q.name), alive: q.alive!==false }); } warLobby(); break;
     case 'left': if (hasPlayer(m.id)) playerLeft(m.id); break;
     case 'start': if (net.started) break; for (const id of Object.keys(m.players||{})) { if (!validId(id)) continue; const q=m.players[id]||{}; net.players[id] = Object.assign(net.players[id]||{}, { name: cleanName(q.name), alive:true }); } beginWar(Number(m.seed)|0); break;
@@ -2176,7 +2178,7 @@ function onNet(m, conn) {
 }
 function netStartWar() {
   const seed = (Math.random()*1e9)|0;
-  net.started = true; netSend({ t:'start', seed, players: net.players }); beginWar(seed);
+  net.started = true; netSend({ t:'start', seed, players: rosterOut() }); beginWar(seed);
 }
 function beginWar(seed) {
   net.started = true; net.alive = true;
