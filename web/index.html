@@ -938,6 +938,19 @@ function spawnShell(kind, x) {
 function updateShells() {
   for (let k=shells.length-1;k>=0;k--) {
     const s=shells[k];
+    if (s.burrow) {                                  // driller bomb: chew straight down, then blow
+      s.spin=(s.spin||0)+1;
+      if (s.spin%3===0) {
+        const nx=Math.floor(s.x), ny=Math.floor(s.y)+1; let stop = ny>=H-3 || s.y>=s.digTo;
+        for (const x of [nx-1,nx,nx+1]) if (inB(x,ny)) { const t=g[ny*W+x]; if (t===CONC||t===HQ||t===ROOM||t===BED||t===DOOR) stop=true; }
+        if (stop) { shells.splice(k,1); explode(s.x, s.y, s.r, { fire:.4, shell:true }); continue; }
+        for (const x of [nx-1,nx,nx+1]) if (inB(x,ny)) { const i=ny*W+x; if (DIGT[g[i]] || g[i]===WATER || g[i]===TIMBER) { g[i]=E; hp[i]=0; } }
+        s.y += 1;
+        if (rand()<.6) particles.push({x:s.x,y:s.y-2,vx:(rand()-.5)*.4,vy:-.2-rand()*.2,life:20,max:20,k:'spark',dirt:1});
+        if (s.spin%12===0 && Math.abs(s.y-(cam.y+viewRows()/2))<viewRows()) sfx.dig();
+      }
+      continue;
+    }
     s.vy += isMet(s.kind)?.01:.025;
     if (!s.whistled && s.y > cam.y-60 && s.kind!=='meteor') { s.whistled=true; sfx.whistle(s.kind==='buster'); }
     if (s.kind==='giant') for (let q=0;q<3;q++) particles.push({x:s.x+(rand()-.5)*5,y:s.y+(rand()-.5)*5,vx:-s.vx*.2+(rand()-.5)*.3,vy:-s.vy*.2,life:45,max:45,k:'spark'});
@@ -953,6 +966,7 @@ function updateShells() {
       if (SOLID[t]) {
         if (s.pen>0 && !s.breached && (t===SOIL||t===GRASS||t===SAND||t===RUBBLE)) { s.pen -= 1; s.vy*=.93; continue; }
         if (s.kind==='buster' && s.pen>0 && t!==BED && !(s.breached && t!==CONC)) { if (t===CONC) s.breached=true; s.pen -= Math.max(1, RES[t]); s.vy*=.95; continue; }   // punches through the slab, then goes off on whatever it was protecting
+        if (s.kind==='driller') { s.burrow=true; s.x=Math.floor(s.x)+.5; s.y=Math.floor(s.y); break; }
         if (isMet(s.kind) && state==='play') game.meteors++;
         explode(s.x, s.y, s.r, { fire: isMet(s.kind) ? 1.5 : s.kind==='heavy'||s.kind==='buster' ? .3 : .12, shell: !isMet(s.kind) });
         dead=true;
@@ -1617,6 +1631,7 @@ function drawEntities(s) {
   for (const sh2 of shells) {
     if (sh2.kind==='giant') { px(sh2.x-3,sh2.y-3,7,7,'#c0501e'); px(sh2.x-2,sh2.y-2,5,5,'#ffd27a'); px(sh2.x-1,sh2.y-1,2,2,'#fff'); }
     else if (isMet(sh2.kind)) { px(sh2.x-1,sh2.y-1,3,3,'#ffd27a'); px(sh2.x,sh2.y,1,1,'#fff'); }
+    else if (sh2.kind==='driller') { px(sh2.x-1,sh2.y-3,2,3,'#4a4c52'); px(sh2.x-.5+(((sh2.spin||0)>>1)&1)*.5,sh2.y,1,1,'#e6bf4a'); }
     else if (sh2.kind==='buster') { px(sh2.x-.5,sh2.y-3,2,3,'#1e1c1a'); px(sh2.x-.5,sh2.y,2,1,'#c0402a'); }
     else { px(sh2.x,sh2.y-1,1,2,'#2a2622'); }
   }
@@ -2094,6 +2109,7 @@ const ATTACKS = [
   { id:'raid',    name:'RAID',    cost:80,  label:'A RAIDING PARTY' },
   { id:'tunnel',  name:'TUNNEL',  cost:90,  label:'TUNNELLERS' },
   { id:'heavy',   name:'HEAVY',   cost:130, label:'THE HEAVY GUNS' },
+  { id:'driller', name:'DRILL BOMB', cost:150, label:'A DRILLER BOMB' },
   { id:'meteor',  name:'METEOR',  cost:220, label:'A METEOR' },
 ];
 // anything a peer sends is untrusted: names are reduced to plain letters/digits before they're shown anywhere
@@ -2261,6 +2277,11 @@ function incomingAttack(kind, from, lv=0) {
   if (kind==='heavy') for (let k=0;k<4+lv;k++) schedule(2.5+k*1.4, ()=>big(spawnShell('heavy', pickX())));
   if (kind==='raid') { game.raids++; for (let k=0;k<6+lv*3;k++) schedule(1+k*1.2, ()=>spawnSoldier(rand()<.5?-1:1)); }
   if (kind==='tunnel') for (let k=0;k<2+lv;k++) schedule(1+k*4, ()=>spawnTunneller(rand()<.5?-1:1));
+  if (kind==='driller') schedule(2.5, () => {
+    const gn = gens[rand()*gens.length|0]; if (!gn) return;
+    const sh2 = spawnShell('light', Math.max(2, Math.min(W-3, gn.x + gn.w/2 + (rand()-.5)*24)));   // lands somewhere near a generator, not dead on
+    sh2.kind = 'driller'; sh2.vx = 0; sh2.r = 13 + lv*1.5; sh2.digTo = gn.y + gn.h/2 + (rand()-.5)*12;   // and stops somewhere around its depth
+  });
   if (kind==='meteor') schedule(2.5, ()=>{ const m2=spawnShell('meteor', pickX()); m2.r += lv*5; m2.pen += lv*3; });
 }
 function checkWinner() {
@@ -2277,7 +2298,7 @@ function checkWinner() {
 function rleEncode(a) { const out=[]; let i=0; while (i<a.length) { const v=a[i]; let n=1; while (i+n<a.length && a[i+n]===v && n<255) n++; out.push(v,n); i+=n; } return new Uint8Array(out); }
 function rleDecode(r, len) { const a=new Uint8Array(len); let p=0; for (let i=0;i+1<r.length;i+=2) { a.fill(r[i], p, Math.min(len, p+r[i+1])); p+=r[i+1]; } return a; }
 const PROPCODE = 200;
-const LADCODE = 201, RUNGCODE = 202, ROOMKINDS = ['miners','hospital','mine','magazine','listen'], SHELLKINDS = ['light','howitzer','heavy','meteor','giant','buster'];
+const LADCODE = 201, RUNGCODE = 202, ROOMKINDS = ['miners','hospital','mine','magazine','listen'], SHELLKINDS = ['light','howitzer','heavy','meteor','giant','buster','driller'];
 function netTick() {
   if (!net.on || !net.started) return;
   if (tick%30===0) netSend({ t:'status', gens: gens.length, gold, hp: Math.round(gens.reduce((a,gn)=>a+Math.max(0,gn.hp),0)), time: Math.floor(game.t) });
