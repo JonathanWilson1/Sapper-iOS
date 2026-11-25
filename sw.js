@@ -1,7 +1,7 @@
 // Offline support: keep a copy of the game so the home-screen app runs with no signal.
 // Network first (so updates arrive when online), cached copy when offline.
 // Only the game's own files are ever written to the cache.
-const CACHE = 'sapper-20261124222000';
+const CACHE = 'sapper-20261125180853';
 const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-512.png', './peerjs.min.js'];
 const base = new URL('./', self.location);
 const paths = new Set(FILES.map(f => new URL(f, base).pathname));
