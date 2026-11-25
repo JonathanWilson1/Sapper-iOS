@@ -390,7 +390,7 @@ function destroyGen(gn) {
   for (let y=gn.y;y<gn.y+gn.h;y++) for (let x=gn.x;x<gn.x+gn.w;x++) if (g[y*W+x]===HQ) { g[y*W+x]=rand()<.6?RUBBLE:FIRE; hp[y*W+x]=120; }
   explode(gn.x+gn.w/2, gn.y+3, 12, {fire:1});
   haptic('error');
-  if (state==='play') { if (gens.length) toast(`Generator lost! ${gens.length} left — build another`); else gameOver(); }
+  if (state==='play') { if (gens.length===1) { banner('LAST GENERATOR', 'LOSE IT AND THE LINE FALLS'); haptic('heavy'); } else if (gens.length) toast(`Generator lost! ${gens.length} left — build another`); else gameOver(); }
 }
 
 // ---------- ore: worth ◆4 near the surface rising to ◆10 deep down, with the odd big nugget
@@ -1302,7 +1302,7 @@ function updateDiggers() {
 // ---------- boot camp: a guided first game you can skip
 const tut = { on:false, i:0, t0:0, moved:0 };
 const TUT = [
-  { text:'Use <em>two fingers</em> to scroll around and <em>pinch</em> to zoom. Take a look around your bunker.', done:()=>tut.moved>60 },
+  { text:'That machine is your <em>GENERATOR</em>. Protect it — if every generator is destroyed, you lose. Now use <em>two fingers</em> to scroll around and <em>pinch</em> to zoom. Take a look around your bunker.', done:()=>tut.moved>60 },
   { text:'<em>One finger marks earth to dig.</em> Drag over the earth by the ring — miners come out of the Miners\' Hut and dig it for you.', done:()=>game.dug>=60, mark:()=>({x:gens[0].x-6,y:gens[0].y+GEN_H+3}) },
   { text:'Bright yellow specks are <em>gold ore</em>. Mark the vein to the right of the chamber and let the miners bring it in.', done:()=>game.mined>=25, mark:()=>({x:gens[0].x+38,y:gens[0].y+3}) },
   { text:'Wide tunnels cave in. Drag a <em>PROP</em> up out of the tray and drop it into your tunnel.', done:()=>game.props>=1 },
@@ -1917,6 +1917,7 @@ function startGame(opts={}) {
     [20,'More GENERATORs = more ◆. Shallow pays best, but that is where shells land.'],
     [26,'Earth and CONCRETE absorb blasts.'],
   ];
+  if (!opts.war && !tut.on) banner('PROTECT YOUR GENERATORS', 'LOSE THEM ALL AND THE LINE FALLS');
   if (tut.on) { show('tut',true); startTutorialStep(); }
   else { show('tut',false); if (!opts.war) for (const [t,msg] of tips) schedule(t, ()=>toast(msg)); }
 }
@@ -2222,7 +2223,7 @@ function beginWar(seed) {
   show('warScr', false);
   startGame({ war:true, seed });
   show('warTabs', true); document.body.classList.add('war'); buildAtkTray(); setView('me');
-  banner('TRENCH WAR', 'SWIPE LEFT & RIGHT TO VISIT YOUR RIVALS');
+  banner('PROTECT YOUR GENERATORS', 'LAST GENERATOR STANDING WINS'); schedule(3.5, () => banner('TRENCH WAR', 'SWIPE LEFT & RIGHT TO VISIT YOUR RIVALS'));
 }
 // ---- pages: your bunker plus one page per rival
 function setView(id) {
