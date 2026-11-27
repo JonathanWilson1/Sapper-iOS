@@ -108,7 +108,7 @@ Set `localStorage.sapper.tut='1'` first so the tutorial doesn't block attacks. S
 - Friends found it too easy at times and too hard at others. The current pacing is the agreed balance. Change difficulty only when asked, and report idle survival time.
 
 ## Pending hand-over (from the 27 Nov chat)
-- The code tidy-up (css + 13 `web/js` files, ARCHITECTURE.md, README, crash guard, hidden `?debug` menu, meta tags, iOS shell bundles `web/`) is **committed locally on `main`, dated 27 Nov 18:06, but NOT pushed or published**. After 18:00 on a weekday (or any weekend time): run the tests (see Test), then `git push origin main && scripts/deploy.sh`. Then run `tests/offline.js` against the live site, check that the live `js/core.js` has the new BUILD, and tell him to open the site once with `?debug` to get the Debug menu back.
+- The code tidy-up (css + 13 `web/js` files etc.) was published as build 1127-1806.
 - Two test scripts are stale: the tunneller "killed by digging" check in `rooms-tunnellers-daily.js` gives 0 because miners dig now, and `debug-menu.js` is flaky when a random event ends its game.
 - A local branch `backup-before-redate-*` holds the pre-redate history; it's local only.
 
