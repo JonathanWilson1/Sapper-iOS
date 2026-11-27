@@ -4,7 +4,7 @@ const { chromium } = require('playwright-core');
   const p = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file:///Users/jonathanwilson/Developer/Sapper-iOS/web/index.html');
-  await p.evaluate(()=>localStorage.setItem('sapper.tut','1')); await p.waitForTimeout(300); await p.click('#startBtn'); await p.waitForTimeout(300);
+  await p.evaluate(()=>localStorage.setItem('sapper.tut','1')); await p.evaluate(()=>localStorage.setItem('sapper.debug','1')); await p.reload(); await p.waitForTimeout(300); await p.click('#startBtn'); await p.waitForTimeout(300);
   await p.click('#pauseBtn'); await p.click('#debugBtn'); await p.waitForTimeout(200);
   await p.screenshot({ path:'/tmp/sapper-out/debug.png' });
   const n = await p.locator('#debugList button').count();

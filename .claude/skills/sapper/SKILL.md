@@ -9,7 +9,7 @@ A fun game Jonathan plays with friends. **Not a money project**: don't pitch pri
 
 - Repo: `~/Developer/Sapper-iOS` → github.com/JonathanWilson1/Sapper-iOS (public)
 - Live: **https://jonathanwilson1.github.io/Sapper-iOS/**. Jonathan plays it on iPhone as a home-screen web app, often away from his Mac.
-- The whole game is **one file**: `web/index.html` (~2,200 lines of vanilla JS + canvas, no dependencies, works offline).
+- The game is a plain web page: `web/index.html` (screens), `web/css/style.css`, and **13 ordered scripts in `web/js/`** sharing one global scope (no build step, Prettier-formatted). **Read `ARCHITECTURE.md` for the file map and how to add things.** Any new file must also go in `web/sw.js` `FILES`.
 - iOS shell: `Sources/SapperApp.swift` (SwiftUI + WKWebView, haptics + share-sheet bridge), `project.yml` (XcodeGen). It builds, but has never been run on a device. Jonathan uses the web version.
 
 ## How to work with Jonathan on this
@@ -22,7 +22,7 @@ A fun game Jonathan plays with friends. **Not a money project**: don't pitch pri
 ```bash
 cd ~/Developer/Sapper-iOS && git add -A && git commit -m "…" && git push -q origin main && scripts/deploy.sh
 ```
-`deploy.sh` copies `web/*` onto the `gh-pages` branch. It stamps `const BUILD = 'dev'` with a UTC timestamp and gives the service-worker cache a new name. Pages goes live in about a minute (`curl -s https://jonathanwilson1.github.io/Sapper-iOS/ | grep BUILD`).
+`deploy.sh` mirrors `web/` onto the `gh-pages` branch. The build id is stamped in `web/js/core.js`, and both the build id and the publish commit take the latest commit's time. It stamps `const BUILD = 'dev'` with a UTC timestamp and gives the service-worker cache a new name. Pages goes live in about a minute (`curl -s https://jonathanwilson1.github.io/Sapper-iOS/ | grep BUILD`).
 
 Offline/update machinery:
 - `web/sw.js`: network-first, same-origin, caches only the app's own files.
@@ -88,6 +88,8 @@ Set `localStorage.sapper.tut='1'` first so the tutorial doesn't block attacks. S
   - Tabs, or swiping on a rival page (an edge swipe on your own page), move between bunkers. A rival page zooms onto their generators with an attack tray: BARRAGE 60, RAID 80, TUNNEL 90, HEAVY 130, DRILL BOMB 150 (lands within ~12 cells of a generator, burrows to roughly its depth ±6 rows, explodes; concrete, buildings and hatches set it off early), METEOR 220. The war-only upgrade **War Footing** (100/220/400) makes your attacks bigger (more shells, larger blasts, more raiders and tunnellers); the level travels with each attack. Tabs and the attack tray react on `pointerdown` and are updated in place, never rebuilt.
   - There are **no AI attacks** in a war; the only attacks are ones players send. The attack tray reacts on `pointerdown`, because iOS doesn't fire delegated clicks on plain divs. Last generator standing wins; a fallen player can "Watch the others".
   - Test with `tests/trench-war.js` (serve `web/` on :8799 first; headless pauses background tabs, so the test ticks them by hand). Code is in the `// ---------- TRENCH WAR` section.
+- **Debug menu** is hidden from the public: open the game once with `?debug` on that phone to show it.
+- **Timing**: Jonathan doesn't want Sapper commits or publishes during work hours (weekdays ~9–18 UK). Do the work, hold the commit and publish, and schedule them for after 18:00 with `send_later`.
 - **Modes**: Boot Camp tutorial (runs automatically the first time, skippable), Daily Challenge (seeded map + attack order, per-day best), Debug menu (Pause → Debug: fire any event, +gold, god mode, etc.).
 - **Score and share**:
   - Score = time×5 + waves×100 + kills×25 + meteors×150 + mined/2.
@@ -105,8 +107,14 @@ Set `localStorage.sapper.tut='1'` first so the tutorial doesn't block attacks. S
 - Text is too small on a phone → keep fonts ≥14 px and labels short.
 - Friends found it too easy at times and too hard at others. The current pacing is the agreed balance. Change difficulty only when asked, and report idle survival time.
 
+## Pending hand-over (from the 27 Nov chat)
+- The code tidy-up (css + 13 `web/js` files, ARCHITECTURE.md, README, crash guard, hidden `?debug` menu, meta tags, iOS shell bundles `web/`) is **committed locally on `main`, dated 27 Nov 18:06, but NOT pushed or published**. After 18:00 on a weekday (or any weekend time): run the tests (see Test), then `git push origin main && scripts/deploy.sh`. Then run `tests/offline.js` against the live site, check that the live `js/core.js` has the new BUILD, and tell him to open the site once with `?debug` to get the Debug menu back.
+- Two test scripts are stale: the tunneller "killed by digging" check in `rooms-tunnellers-daily.js` gives 0 because miners dig now, and `debug-menu.js` is flaky when a random event ends its game.
+- A local branch `backup-before-redate-*` holds the pre-redate history; it's local only.
+
 ## Backlog (ideas he's seen; build on request)
 - **Water in drill shafts**: the drill pumps its own shaft, and pumps drain a whole connected pool. This was recommended and he leaned toward it but hasn't confirmed.
+- **Drag-a-rectangle dig marking**: offered.
 - **Game-over cause**: "last generator flooded / mined / shelled" plus a warning when only one generator is left. Offered, awaiting a yes.
 - Rivals via share links (no server), Game Center when the native app ships.
 - Sectors/levels: Flanders mud, chalk, mountain pass (more attack area, less gold), desert.

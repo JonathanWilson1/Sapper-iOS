@@ -36,7 +36,7 @@ struct GameView: UIViewRepresentable {
         web.scrollView.isScrollEnabled = false
         web.scrollView.bounces = false
         web.scrollView.contentInsetAdjustmentBehavior = .never
-        if let url = Bundle.main.url(forResource: "index", withExtension: "html") {
+        if let url = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "web") {
             web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
         return web

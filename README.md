@@ -1,31 +1,23 @@
-# SAPPER — Hold the Line (prototype 0.1)
+# SAPPER — Hold the Line
 
-A WW1 underground-bunker survival game built on a falling-sand simulation. It's portrait-only with vertical scrolling and works fully offline.
+A falling-sand bunker survival game set in WW1-style tunnels. You dig, brace and build underground, and keep your generators running through shellfire, floods, raiders, enemy tunnellers and meteors. Lose every generator and the line falls. It plays in portrait on a phone and works offline once you add it to the home screen.
 
-- **Play in a browser:** open `web/index.html` (the whole game is one file).
-- **Run on iOS:** `xcodegen generate`, open `Sapper.xcodeproj`, then run. It's a SwiftUI + WKWebView shell that bundles the HTML and bridges haptics.
+**Play:** https://jonathanwilson1.github.io/Sapper-iOS/
 
-## Loop
-You get timed survival. Keep the Command Post alive while the director escalates the events: artillery barrages, heavy guns that penetrate the ground, storms that flood the tunnels, infantry raids (the raiders sap their way down to you), tremors, and meteors.
+## Modes
+- **Dig In:** endless survival. The attacks get heavier the longer you last.
+- **Boot Camp:** a guided first game. It runs automatically the first time and you can skip it.
+- **Daily Challenge:** the same map and attack order for everyone, once a day.
+- **Trench War:** 2–4 players, each on their own phone. Swipe over to your rivals' bunkers, spend gold shelling them, and the last generator standing wins.
 
-## Materials
-| Material | Behaviour |
-|---|---|
-| Soil | Stable, but ceilings crumble into rubble unless braced within 6 cells |
-| Sand | Pours. You can only hold it back with walls |
-| Rock / Gold | Slow to dig. Gold ore pays ◆ |
-| Water | Flows, seeps slowly into soil, and drowns the post. Aquifers sit deep |
-| Timber / Bags / Concrete | Braces ceilings and absorbs blasts (the blast ray-march sums each material's resistance) |
+## How to play
+- **One finger** marks earth to dig. Miners from your Miners' Hut dig it out.
+- **Two fingers** scroll and pinch-zoom.
+- **ROOM** builds generators, pumps, huts, a field hospital, mine heads, magazines and listening posts. Miners dig out and build each one.
+- **PROP** braces tunnels, and **CONCRETE** (tap to toggle) draws blast-proof walls.
+- Tap the **drill** to bore down; tap a **generator** to overcharge it.
 
-Gold is the brake on overbuilding. You earn it by mining ore, from a slow passive supply, by holding each wave (+15) and by killing raiders (+3).
+## Code
+Plain HTML, CSS and JavaScript with no build step. [ARCHITECTURE.md](ARCHITECTURE.md) maps the files. Tests are in `tests/`.
 
-## Research notes
-- **Fallout Shelter:** a vertical underground base plus incidents. This is the closest loop to Sapper.
-- **Noita, Sandustry, Deepfall, Pound Sand:** falling-sand worlds. None of them are bunker defence on mobile.
-- **Motherload:** dig down for ore, with risk rising as you go deeper.
-- **Worms, Dig In, Trenches (iOS):** WW1 trench fantasy and destructible terrain.
-
-## Next steps
-- **Local 2-player:** MultipeerConnectivity (Bluetooth/peer Wi-Fi) in the native shell. The host runs the sim and streams the dirty rows, and each player controls one sapper character.
-- A controllable sapper character (Worms-style flamethrower/shovel).
-- Upgrade tree, more node types (ammo dump, generator), an app icon, and a Game Center leaderboard for survival time.
+The iOS shell (`Sources/`, `project.yml`, XcodeGen) wraps `web/` in a WKWebView, adding haptics and the native share sheet.

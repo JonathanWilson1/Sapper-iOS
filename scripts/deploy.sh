@@ -6,8 +6,8 @@ BUILD=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y%m%d%H%M%S)   # bui
 URL=$(git remote get-url origin)
 TMP=$(mktemp -d)
 git clone -q -b gh-pages "$URL" "$TMP"
-cp web/* "$TMP/"
-sed -i '' "s/const BUILD = 'dev';/const BUILD = '$BUILD';/" "$TMP/index.html"
+rsync -a --delete --exclude .git --exclude .nojekyll web/ "$TMP/"
+sed -i '' "s/const BUILD = 'dev';/const BUILD = '$BUILD';/" "$TMP/js/core.js"
 sed -i '' "s/const CACHE = 'sapper-v[0-9]*';/const CACHE = 'sapper-$BUILD';/" "$TMP/sw.js"
 cd "$TMP" && git add -A && GIT_AUTHOR_DATE="$(cd - >/dev/null; git log -1 --format=%cI)" GIT_COMMITTER_DATE="$(cd - >/dev/null; git log -1 --format=%cI)" git commit -q -m "Publish" && git push -q origin gh-pages
 echo "Published build $BUILD"

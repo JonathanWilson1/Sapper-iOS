@@ -8,7 +8,8 @@ targets:
     platform: iOS
     sources:
       - path: Sources
-      - path: web/index.html
+      - path: web
+        type: folder
         buildPhase: resources
     settings:
       base:
